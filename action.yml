@@ -1,0 +1,143 @@
+name: 'Pull Request notification for tasks'
+description: 'This action is used to send notification to eXo Tasks during the Pull Request workflow (creation, approval, closing, merge).'
+inputs:
+  SERVER_URL:
+    description: Target Server URL
+    required: true
+  SERVER_DEFAULT_SITENAME:
+    description: Target Server Default Sitename
+    required: false
+    default: "dw"
+  SERVER_USERNAME:
+    description: Target Server username
+    required: true
+  SERVER_PASSWORD:
+    description: Target Server user password
+    required: true
+  TASKS_REGEX_FILTER:
+    description: Pull request tasks regex filter
+    required: false
+    default: "(task|maint|exo)((-|_)[0-9]{4,})+"
+runs:
+  using: "composite"
+  steps:
+    - name: PLF Tasks Webhook
+      shell: bash
+      run: |
+        doGetCurl() {
+          curl -A "PR Webhook Tasks/1.0" -s -f -L -u ${SERVER_USERNAME}:${SERVER_PASSWORD} -XGET $*
+        }
+        if [[ ! ${base_branch_name} =~ ^(master|develop(-exo|-meed)?|feature\/[A-Za-z-]+[0-9]?|stable\/[0-9]+(\.[0-9]+)*\.x)$ ]]; then
+          echo "❌ Branch ${base_branch_name} is not supported for Task notification. Abort"
+          exit 0
+        fi
+        if [[ ${creator} =~ ^(dependabot\[bot\]|snyk-bot)$ ]]; then
+          echo "❌ PR created with Bot users is not supported for Task notification. Abort"
+          exit 0
+        fi
+        TASKS_IDS="$(echo ${message:-}| grep -ioP "${TASKS_REGEX_FILTER}" | grep -oP [0-9]+ | xargs)"
+        if [ -z "${TASKS_IDS}" ]; then
+          echo "No tasks found! Abort."
+          exit 0
+        fi
+        echo "OK Task(s) found! Starting notifications..."
+        link="PR <a href=\"https://github.com/${repo_name}/pull/${pull_number}\">${repo_name}#${pull_number}</a>"
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          if [ "${{ github.event.action }}" = "review_requested" ]; then
+            serverUser=$(doGetCurl "${SERVER_GAMGH_CONNECTOR_REST_URL}/users/${requested_reviewer}" || echo "")
+            if [ ! -z "${serverUser}" ]; then
+              echo "Requested reviewer is: ${serverUser}."
+              msg="💭 $link requested a review from @${serverUser} "
+            else
+              echo "❌ Could not get Server user identifier! Abort"
+              exit 0
+            fi
+          elif [ "${{ github.event.pull_request.merged }}" = "true" ]; then
+            mergedCommitlink="<a href=\"https://github.com/${repo_name}/commit/${{ github.event.pull_request.merge_commit_sha }}\">merged</a>"
+            base_branch_link="<a href=\"https://github.com/${repo_name}/tree/${base_branch_name}\">${base_branch_name}</a>"
+            mergerGithubUser="${{ github.event.pull_request.merged_by.login }}"
+            mergerServerUser=$(doGetCurl "${SERVER_GAMGH_CONNECTOR_REST_URL}/users/${mergerGithubUser}" || echo "")
+            mergerServerProfile=$(doGetCurl "${SERVER_URL}/rest/private/v1/social/users/${mergerServerUser}" 2>/dev/null || echo "")
+            mergerServerFullName="$(echo ${mergerServerProfile} | jq .fullname | tr -d '\"' || echo "")"
+            mergerServerLink="<a target=\"_self\" rel=\"noopener\" href=\"/portal/${SERVER_DEFAULT_SITENAME}/profile/${mergerServerUser}\" class=\"user-suggester\">${mergerServerFullName}</a>"
+            if [ -z "${mergerServerFullName:-}" ]; then 
+              msg="🌟 $link has been ${mergedCommitlink} into ${base_branch_link}."
+            else
+              msg="🌟 $link has been ${mergedCommitlink} into ${base_branch_link} by ${mergerServerLink}."
+            fi
+          elif [ "${{ github.event.action }}" = "closed" ]; then
+            msg="🍂 $link has been ${{ github.event.action }}."
+          elif [ "${{ github.event.action }}" = "opened" ]; then
+            msg="🌱 $link has been created."
+          elif [ "${{ github.event.action }}" = "reopened" ]; then
+            msg="🍃 $link has been ${{ github.event.action }}."
+          else
+            msg="ℹ️ $link has been ${{ github.event.action }}."
+          fi
+        elif [ "${{ github.event_name }}" = "pull_request_review" ] && [ "${{ github.event.action }}" = "submitted" ]; then
+          mentionCreator=""
+          commentMentionFilterRegex='( |^)@[a-zA-Z0-9]+-?[a-zA-Z0-9]+( |$)'
+          response=$(doGetCurl "${SERVER_GAMGH_CONNECTOR_REST_URL}/users/${creator}" || echo "")
+          [ -z "${response}" ] || mentionCreator=" FYI @${response} "
+          reviewerGithubUser="${{ github.event.review.user.login }}"
+          reviewerServerUser=$(doGetCurl "${SERVER_GAMGH_CONNECTOR_REST_URL}/users/${reviewerGithubUser}" || echo "")
+          reviewerServerProfile=$(doGetCurl "${SERVER_URL}/rest/private/v1/social/users/${reviewerServerUser}" 2>/dev/null || echo "")
+          reviewerServerFullName="$(echo ${reviewerServerProfile} | jq .fullname | tr -d '\"' || echo "")"
+          reviewerServerLink="<a target=\"_self\" rel=\"noopener\" href=\"/portal/${SERVER_DEFAULT_SITENAME}/profile/${reviewerServerUser}\" class=\"user-suggester\">${reviewerServerFullName}</a>"
+          reviewEventLink="${{ github.event.review.html_url }}"
+          if [ "${{ github.event.review.state }}" = "changes_requested" ]; then
+            requestChangesEventLink="<a href=\"$reviewEventLink\">changes</a>"
+            if [ -z "${reviewerServerFullName:-}" ]; then 
+              msg="🛠️ $link requires ${requestChangesEventLink}.${mentionCreator}"
+            else 
+              msg="🛠️ $link requires ${requestChangesEventLink} from ${reviewerServerLink}.${mentionCreator}"
+            fi
+          elif [ "${{ github.event.review.state }}" = "approved" ]; then
+            approvedEventLink="<a href=\"$reviewEventLink\">approved</a>"
+            if [ -z "${reviewerServerFullName:-}" ]; then 
+              msg="✅ $link has been ${approvedEventLink}.${mentionCreator}"
+            else 
+              msg="✅ $link has been ${approvedEventLink} by ${reviewerServerLink}.${mentionCreator}"
+            fi
+          elif [ "${{ github.event.review.state }}" = "commented" ] && [[ "${{ github.event.review.body }}" =~ $commentMentionFilterRegex ]]; then
+            mentionEventLink="<a href=\"$reviewEventLink\">mentioned</a>"
+            mentionedGithubUsers=$(echo "${{ github.event.review.body }}" | grep -oP "$commentMentionFilterRegex" | tr -d '@' | xargs)
+            mentionedServerUsers=""
+            for mentionedGithubUser in ${mentionedGithubUsers}; do 
+              response=$(doGetCurl "${SERVER_GAMGH_CONNECTOR_REST_URL}/users/${mentionedGithubUser}" || echo "")
+              [ -z "${response}" ] && continue
+              [ -z "${mentionedServerUsers}" ] && mentionedServerUsers="@${response}" || mentionedServerUsers="${mentionedServerUsers} and @${response}"
+            done
+            [ -z "${mentionedServerUsers}" ] && mentionedServerUsers="$(echo $mentionedGithubUsers | wc -w ) user(s)"
+            msg="🙋 $link has ${mentionEventLink} ${mentionedServerUsers} in a comment."
+          else
+            stateEventLink="<a href=\"$reviewEventLink\">${{ github.event.review.state }}</a>"
+            msg="ℹ️ $link has been ${stateEventLink}."
+          fi
+        fi
+        echo "*** Message is:"
+        echo ${msg}
+        echo "***"
+        for TASK_ID in ${TASKS_IDS}; do
+          echo "Commenting to Task #${TASK_ID}..."
+          curl -so /dev/null -w '%{http_code}' --retry 3 --retry-max-time 60 -L -u ${SERVER_USERNAME}:${SERVER_PASSWORD} -XPOST --data-raw "<p>${msg}</p>" "${SERVER_TASK_REST_PREFIXE_URL}/comments/${TASK_ID}"
+        done
+      env:
+        SERVER_URL: ${{ inputs.SERVER_URL }}
+        SERVER_USERNAME: ${{ inputs.SERVER_USERNAME }}
+        SERVER_PASSWORD: ${{ inputs.SERVER_PASSWORD }}
+        SERVER_TASK_REST_PREFIXE_URL: ${{ inputs.SERVER_URL }}/rest/private/tasks
+        SERVER_GAMGH_CONNECTOR_REST_URL: ${{ inputs.SERVER_URL }}/rest/private/gamification/connectors/github/hooksmanagement
+        TASKS_REGEX_FILTER: ${{ inputs.TASKS_REGEX_FILTER }}
+        SERVER_DEFAULT_SITENAME: ${{ inputs.SERVER_DEFAULT_SITENAME }}
+        message: ${{ github.event.pull_request.title }}
+        state: ${{ github.event.pull_request.state }}
+        pull_number: ${{ github.event.pull_request.number }}
+        requested_reviewer: ${{ github.event.requested_reviewer.login }}
+        creator: ${{ github.event.pull_request.user.login }}
+        repo_name: ${{ github.event.repository.full_name }}
+        base_branch_name: ${{ github.event.pull_request.base.ref }}
+
+branding:
+  icon: "arrow-down-circle"
+  color: "gray-dark"
