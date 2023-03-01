@@ -35,11 +35,11 @@ runs:
           echo "❌ PR created with Bot users is not supported for Task notification. Abort"
           exit 0
         fi
-        TASKS_IDS="$(echo ${message:-}| grep -ioP "${TASKS_REGEX_FILTER}" | grep -oP [0-9]+ | xargs)"
-        if [ -z "${TASKS_IDS}" ]; then
+        if ! echo ${message:-} | grep -qioP "${TASKS_REGEX_FILTER}"; then
           echo "No tasks found! Abort."
           exit 0
         fi
+        TASKS_IDS="$(echo ${message:-} | grep -ioP "${TASKS_REGEX_FILTER}" | grep -oP '[0-9]+' | xargs)"
         echo "OK Task(s) found! Starting notifications..."
         link="PR <a href=\"https://github.com/${repo_name}/pull/${pull_number}\">${repo_name}#${pull_number}</a>"
         if [ "${{ github.event_name }}" = "pull_request" ]; then
