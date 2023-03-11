@@ -139,5 +139,5 @@ runs:
         base_branch_name: ${{ github.event.pull_request.base.ref }}
 
 branding:
-  icon: "arrow-down-circle"
+  icon: "bell"
   color: "gray-dark"
