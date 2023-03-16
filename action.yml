@@ -41,7 +41,7 @@ runs:
         fi
         TASKS_IDS="$(echo ${message:-} | grep -ioP "${TASKS_REGEX_FILTER}" | grep -oP '[0-9]+' | xargs)"
         echo "OK Task(s) found! Starting notifications..."
-        link="PR <a href=\"https://github.com/${repo_name}/pull/${pull_number}\">${repo_name}#${pull_number}</a>"
+        link="PR <a href=\"https://github.com/${repo_name}/pull/${pull_number}\">${repo_name}(${base_branch_name})#${pull_number}</a>"
         if [ "${{ github.event_name }}" = "pull_request" ]; then
           if [ "${{ github.event.action }}" = "review_requested" ]; then
             serverUser=$(doGetCurl "${SERVER_GAMGH_CONNECTOR_REST_URL}/users/${requested_reviewer}" || echo "")
