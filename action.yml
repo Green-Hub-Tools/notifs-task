@@ -53,7 +53,12 @@ runs:
               exit 0
             fi
           elif [ "${{ github.event.pull_request.merged }}" = "true" ]; then
-            mergedCommitlink="<a href=\"https://github.com/${repo_name}/commit/${{ github.event.pull_request.merge_commit_sha }}\">merged</a>"
+            shortCommitId=$(echo ${{ github.event.pull_request.merge_commit_sha }} | cut -c1-7)
+            mergeMethod="merged"
+            if [ "${{ github.event.pull_request.auto_merge }}" != "null" ]; then 
+              mergeMethod="auto ${{ github.event.pull_request.auto_merge.merge_method }}-merged"
+            fi
+            mergedCommitlink="<a href=\"https://github.com/${repo_name}/commit/${{ github.event.pull_request.merge_commit_sha }}\">${shortCommitId}</a>"
             base_branch_link="<a href=\"https://github.com/${repo_name}/tree/${base_branch_name}\">${base_branch_name}</a>"
             mergerGithubUser="${{ github.event.pull_request.merged_by.login }}"
             mergerServerUser=$(doGetCurl "${SERVER_GAMGH_CONNECTOR_REST_URL}/users/${mergerGithubUser}" || echo "")
@@ -61,9 +66,9 @@ runs:
             mergerServerFullName="$(echo ${mergerServerProfile} | jq .fullname | tr -d '\"' || echo "")"
             mergerServerLink="<a target=\"_self\" rel=\"noopener\" href=\"/portal/${SERVER_DEFAULT_SITENAME}/profile/${mergerServerUser}\" class=\"user-suggester\">${mergerServerFullName}</a>"
             if [ -z "${mergerServerFullName:-}" ]; then 
-              msg="🌟 $link has been ${mergedCommitlink} into ${base_branch_link}."
+              msg="🌟 $link has ${mergeMethod} ${mergedCommitlink} into ${base_branch_link}."
             else
-              msg="🌟 $link has been ${mergedCommitlink} into ${base_branch_link} by ${mergerServerLink}."
+              msg="🌟 $link has ${mergeMethod} ${mergedCommitlink} into ${base_branch_link} by ${mergerServerLink}."
             fi
           elif [ "${{ github.event.action }}" = "closed" ]; then
             msg="🍂 $link has been ${{ github.event.action }}."
