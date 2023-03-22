@@ -5,7 +5,7 @@ This action is used to send notification to eXo Tasks during the Pull Request wo
 # Example call of this action
 
 ```yaml
-name: Pull Request notification for tasks
+name: PLF Pull Request Notifications
 
 on:
   pull_request:
@@ -14,14 +14,16 @@ on:
     types: [submitted]
 
 jobs:
-  notif_tasks:
+  notify_tasks:
+    name: Check for tasks identifiers
     runs-on: ubuntu-latest
     steps:
-    - name: Send Notifications to Task
-      uses: hbenali/notifs-task@main
-      with:
-        SERVER_URL: https://community.exoplatform.com
-      secrets:
-        SERVER_USERNAME: ${{ secrets.SERVER_USERNAME }}
-        SERVER_PASSWORD: ${{ secrets.SERVER_PASSWORD }}
+      - name: PLF Tasks Webhook
+        uses: Green-Hub-Tools/notifs-task@main
+        with:
+          SERVER_URL: 'https://community.exoplatform.com'
+          SERVER_DEFAULT_SITENAME: 'dw'
+          SERVER_USERNAME: ${{ secrets.SERVER_USERNAME }}
+          SERVER_PASSWORD: ${{ secrets.SERVER_PASSWORD }}
+          TASKS_REGEX_FILTER: '(task|maint|exo)((-|_)[0-9]{4,})+' 
 ```
