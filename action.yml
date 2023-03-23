@@ -41,7 +41,8 @@ runs:
         fi
         TASKS_IDS="$(echo ${message:-} | grep -ioP "${TASKS_REGEX_FILTER}" | grep -oP '[0-9]+' | xargs)"
         echo "OK Task(s) found! Starting notifications..."
-        link="PR <a href=\"https://github.com/${repo_name}/pull/${pull_number}\">${repo_name}(${base_branch_name})#${pull_number}</a>"
+        reducedBaseBranchName=$(echo ${base_branch_name} | sed -e 's|feature/||gi' -e 's|stable/||gi')
+        link="PR <a href=\"https://github.com/${full_repo_name}/pull/${pull_number}\" title="${full_repo_name}#${pull_number}:${base_branch_name}">${repo_name}#${pull_number}:${reducedBaseBranchName}</a>"
         if [ "${{ github.event_name }}" = "pull_request" ]; then
           if [ "${{ github.event.action }}" = "review_requested" ]; then
             serverUser=$(doGetCurl "${SERVER_GAMGH_CONNECTOR_REST_URL}/users/${requested_reviewer}" || echo "")
@@ -58,8 +59,8 @@ runs:
             if [ "${{ github.event.pull_request.auto_merge }}" != "null" ]; then 
               mergeMethod="auto ${{ github.event.pull_request.auto_merge.merge_method }}-merged"
             fi
-            mergedCommitlink="<a href=\"https://github.com/${repo_name}/commit/${{ github.event.pull_request.merge_commit_sha }}\">${shortCommitId}</a>"
-            base_branch_link="<a href=\"https://github.com/${repo_name}/tree/${base_branch_name}\">${base_branch_name}</a>"
+            mergedCommitlink="<a href=\"https://github.com/${full_repo_name}/commit/${{ github.event.pull_request.merge_commit_sha }}\">${shortCommitId}</a>"
+            base_branch_link="<a href=\"https://github.com/${full_repo_name}/tree/${base_branch_name}\">${base_branch_name}</a>"
             mergerGithubUser="${{ github.event.pull_request.merged_by.login }}"
             mergerServerUser=$(doGetCurl "${SERVER_GAMGH_CONNECTOR_REST_URL}/users/${mergerGithubUser}" || echo "")
             mergerServerProfile=$(doGetCurl "${SERVER_URL}/rest/private/v1/social/users/${mergerServerUser}" 2>/dev/null || echo "")
@@ -140,7 +141,8 @@ runs:
         pull_number: ${{ github.event.pull_request.number }}
         requested_reviewer: ${{ github.event.requested_reviewer.login }}
         creator: ${{ github.event.pull_request.user.login }}
-        repo_name: ${{ github.event.repository.full_name }}
+        full_repo_name: ${{ github.event.repository.full_name }}
+        repo_name: ${{ github.event.repository.name }}
         base_branch_name: ${{ github.event.pull_request.base.ref }}
 
 branding:
