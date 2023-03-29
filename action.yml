@@ -56,7 +56,7 @@ runs:
           elif [ "${{ github.event.pull_request.merged }}" = "true" ]; then
             shortCommitId=$(echo ${{ github.event.pull_request.merge_commit_sha }} | cut -c1-7)
             mergeMethod="merged"
-            if [ "${{ github.event.pull_request.auto_merge }}" != "null" ]; then 
+            if [ "${{ github.event.pull_request.auto_merge }}" != "null" ] && [ "${{ github.event.pull_request.auto_merge }}" != "" ]; then 
               mergeMethod="auto ${{ github.event.pull_request.auto_merge.merge_method }}-merged"
             fi
             mergedCommitlink="<a href=\"https://github.com/${full_repo_name}/commit/${{ github.event.pull_request.merge_commit_sha }}\">${shortCommitId}</a>"
@@ -66,7 +66,7 @@ runs:
             mergerServerProfile=$(doGetCurl "${SERVER_URL}/rest/private/v1/social/users/${mergerServerUser}" 2>/dev/null || echo "")
             mergerServerFullName="$(echo ${mergerServerProfile} | jq .fullname | tr -d '\"' || echo "")"
             mergerServerLink="<a target=\"_self\" rel=\"noopener\" href=\"/portal/${SERVER_DEFAULT_SITENAME}/profile/${mergerServerUser}\" class=\"user-suggester\">${mergerServerFullName}</a>"
-            if [ -z "${mergerServerFullName:-}" ]; then 
+            if [ -z "${mergerServerFullName:-}" ] || [ "${mergerServerFullName:-}" = "null" ]; then 
               msg="🌟 $link has ${mergeMethod} ${mergedCommitlink} into ${base_branch_link}."
             else
               msg="🌟 $link has ${mergeMethod} ${mergedCommitlink} into ${base_branch_link} by ${mergerServerLink}."
