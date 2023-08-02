@@ -64,7 +64,7 @@ runs:
             mergerGithubUser="${{ github.event.pull_request.merged_by.login }}"
             mergerServerUser=$(doGetCurl "${SERVER_GAMGH_CONNECTOR_REST_URL}/users/${mergerGithubUser}" || echo "")
             mergerServerProfile=$(doGetCurl "${SERVER_URL}/rest/private/v1/social/users/${mergerServerUser}" 2>/dev/null || echo "")
-            mergerServerFullName="$(echo ${mergerServerProfile} | jq .fullname | tr -d '\"' || echo "")"
+            mergerServerFullName="$(echo ${mergerServerProfile} | jq -r .fullname)"
             mergerServerLink="<a target=\"_self\" rel=\"noopener\" href=\"/portal/${SERVER_DEFAULT_SITENAME}/profile/${mergerServerUser}\" class=\"user-suggester\">${mergerServerFullName}</a>"
             if [ -z "${mergerServerFullName:-}" ] || [ "${mergerServerFullName:-}" = "null" ]; then 
               msg="🌟 $link has ${mergeMethod} ${mergedCommitlink} into ${base_branch_link}."
@@ -88,7 +88,7 @@ runs:
           reviewerGithubUser="${{ github.event.review.user.login }}"
           reviewerServerUser=$(doGetCurl "${SERVER_GAMGH_CONNECTOR_REST_URL}/users/${reviewerGithubUser}" || echo "")
           reviewerServerProfile=$(doGetCurl "${SERVER_URL}/rest/private/v1/social/users/${reviewerServerUser}" 2>/dev/null || echo "")
-          reviewerServerFullName="$(echo ${reviewerServerProfile} | jq .fullname | tr -d '\"' || echo "")"
+          reviewerServerFullName="$(echo ${reviewerServerProfile} | jq -r .fullname)"
           reviewerServerLink="<a target=\"_self\" rel=\"noopener\" href=\"/portal/${SERVER_DEFAULT_SITENAME}/profile/${reviewerServerUser}\" class=\"user-suggester\">${reviewerServerFullName}</a>"
           reviewEventLink="${{ github.event.review.html_url }}"
           if [ "${{ github.event.review.state }}" = "changes_requested" ]; then
