@@ -42,7 +42,7 @@ runs:
         TASKS_IDS="$(echo ${message:-} | grep -ioP "${TASKS_REGEX_FILTER}" | grep -oP '[0-9]+' | xargs)"
         echo "OK Task(s) found! Starting notifications..."
         reducedBaseBranchName=$(echo ${base_branch_name} | sed -e 's|feature/||gi' -e 's|stable/||gi')
-        link="PR <a href=\"https://github.com/${full_repo_name}/pull/${pull_number}\" title="${full_repo_name}#${pull_number}:${base_branch_name}">${repo_name}#${pull_number}:${reducedBaseBranchName}</a>"
+        link="PR <a href=\"https://github.com/${full_repo_name}/pull/${pull_number}\" title="${full_repo_name}#${pull_number}:${base_branch_name}" target="_blank">${repo_name}#${pull_number}:${reducedBaseBranchName}</a>"
         if [ "${{ github.event_name }}" = "pull_request" ]; then
           if [ "${{ github.event.action }}" = "review_requested" ]; then
             serverUser=$(doGetCurl "${SERVER_GAMGH_CONNECTOR_REST_URL}/users/${requested_reviewer}" || echo "")
@@ -59,8 +59,8 @@ runs:
             if [ "${{ github.event.pull_request.auto_merge }}" != "null" ] && [ "${{ github.event.pull_request.auto_merge }}" != "" ]; then 
               mergeMethod="auto ${{ github.event.pull_request.auto_merge.merge_method }}-merged"
             fi
-            mergedCommitlink="<a href=\"https://github.com/${full_repo_name}/commit/${{ github.event.pull_request.merge_commit_sha }}\">${shortCommitId}</a>"
-            base_branch_link="<a href=\"https://github.com/${full_repo_name}/tree/${base_branch_name}\">${base_branch_name}</a>"
+            mergedCommitlink="<a href=\"https://github.com/${full_repo_name}/commit/${{ github.event.pull_request.merge_commit_sha }}\" target="_blank">${shortCommitId}</a>"
+            base_branch_link="<a href=\"https://github.com/${full_repo_name}/tree/${base_branch_name}\" target="_blank">${base_branch_name}</a>"
             mergerGithubUser="${{ github.event.pull_request.merged_by.login }}"
             mergerServerUser=$(doGetCurl "${SERVER_GAMGH_CONNECTOR_REST_URL}/users/${mergerGithubUser}" || echo "")
             mergerServerProfile=$(doGetCurl "${SERVER_URL}/rest/private/v1/social/users/${mergerServerUser}" 2>/dev/null || echo "")
@@ -106,7 +106,7 @@ runs:
               msg="✅ $link has been ${approvedEventLink} by ${reviewerServerLink}.${mentionCreator}"
             fi
           elif [ "${{ github.event.review.state }}" = "commented" ] && [[ "${{ github.event.review.body }}" =~ $commentMentionFilterRegex ]]; then
-            mentionEventLink="<a href=\"$reviewEventLink\">mentioned</a>"
+            mentionEventLink="<a href=\"$reviewEventLink\" target="_blank">mentioned</a>"
             mentionedGithubUsers=$(echo "${{ github.event.review.body }}" | grep -oP "$commentMentionFilterRegex" | tr -d '@' | xargs)
             mentionedServerUsers=""
             for mentionedGithubUser in ${mentionedGithubUsers}; do 
