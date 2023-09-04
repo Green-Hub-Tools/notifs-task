@@ -67,18 +67,18 @@ runs:
             mergerServerFullName="$(echo ${mergerServerProfile} | jq -r .fullname)"
             mergerServerLink="<a target=\"_self\" rel=\"noopener\" href=\"/portal/${SERVER_DEFAULT_SITENAME}/profile/${mergerServerUser}\" class=\"user-suggester\">${mergerServerFullName}</a>"
             if [ -z "${mergerServerFullName:-}" ] || [ "${mergerServerFullName:-}" = "null" ]; then 
-              msg="🌟 $link has ${mergeMethod} ${mergedCommitlink} into ${base_branch_link}."
+              msg="🌟 $link has <tt>${mergeMethod}</tt> ${mergedCommitlink} into ${base_branch_link}."
             else
-              msg="🌟 $link has ${mergeMethod} ${mergedCommitlink} into ${base_branch_link} by ${mergerServerLink}."
+              msg="🌟 $link has <tt>${mergeMethod}</tt> ${mergedCommitlink} into ${base_branch_link} by ${mergerServerLink}."
             fi
           elif [ "${{ github.event.action }}" = "closed" ]; then
-            msg="🍂 $link has been ${{ github.event.action }}."
+            msg="🍂 $link has been <tt>${{ github.event.action }}</tt>."
           elif [ "${{ github.event.action }}" = "opened" ]; then
-            msg="🌱 $link has been created."
+            msg="🌱 $link has been <tt>created</tt>."
           elif [ "${{ github.event.action }}" = "reopened" ]; then
-            msg="🍃 $link has been ${{ github.event.action }}."
+            msg="🍃 $link has been <tt>${{ github.event.action }}</tt>."
           else
-            msg="ℹ️ $link has been ${{ github.event.action }}."
+            msg="ℹ️ $link has been <tt>${{ github.event.action }}</tt>."
           fi
         elif [ "${{ github.event_name }}" = "pull_request_review" ] && [ "${{ github.event.action }}" = "submitted" ]; then
           mentionCreator=""
