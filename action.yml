@@ -133,7 +133,7 @@ runs:
         SERVER_USERNAME: ${{ inputs.SERVER_USERNAME }}
         SERVER_PASSWORD: ${{ inputs.SERVER_PASSWORD }}
         SERVER_TASK_REST_PREFIXE_URL: ${{ inputs.SERVER_URL }}/rest/private/tasks
-        SERVER_GAMGH_CONNECTOR_REST_URL: ${{ inputs.SERVER_URL }}/rest/private/gamification/connectors/github/hooksmanagement
+        SERVER_GAMGH_CONNECTOR_REST_URL: ${{ inputs.SERVER_URL }}/rest/private/community/github
         TASKS_REGEX_FILTER: ${{ inputs.TASKS_REGEX_FILTER }}
         SERVER_DEFAULT_SITENAME: ${{ inputs.SERVER_DEFAULT_SITENAME }}
         message: ${{ github.event.pull_request.title }}
