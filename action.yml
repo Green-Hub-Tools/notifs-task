@@ -45,14 +45,8 @@ runs:
         link="PR <a href=\"https://github.com/${full_repo_name}/pull/${pull_number}\" title="${full_repo_name}#${pull_number}:${base_branch_name}" target="_blank">${repo_name}#${pull_number}:${reducedBaseBranchName}</a>"
         if [ "${{ github.event_name }}" = "pull_request" ]; then
           if [ "${{ github.event.action }}" = "review_requested" ]; then
-            serverUser=$(doGetCurl "${SERVER_GAMGH_CONNECTOR_REST_URL}/users/${requested_reviewer}" || echo "")
-            if [ ! -z "${serverUser}" ]; then
-              echo "Requested reviewer is: ${serverUser}."
-              msg="💭 $link requested a review from @${serverUser} "
-            else
-              echo "❌ Could not get Server user identifier! Abort"
-              exit 0
-            fi
+              echo "Requested reviewer is: ${requested_reviewer}."
+              msg="💭 $link requested a review from <tt>${requested_reviewer}</tt>"
           elif [ "${{ github.event.pull_request.merged }}" = "true" ]; then
             shortCommitId=$(echo ${{ github.event.pull_request.merge_commit_sha }} | cut -c1-7)
             mergeMethod="merged"
@@ -62,15 +56,7 @@ runs:
             mergedCommitlink="<a href=\"https://github.com/${full_repo_name}/commit/${{ github.event.pull_request.merge_commit_sha }}\" target="_blank">${shortCommitId}</a>"
             base_branch_link="<a href=\"https://github.com/${full_repo_name}/tree/${base_branch_name}\" target="_blank">${base_branch_name}</a>"
             mergerGithubUser="${{ github.event.pull_request.merged_by.login }}"
-            mergerServerUser=$(doGetCurl "${SERVER_GAMGH_CONNECTOR_REST_URL}/users/${mergerGithubUser}" || echo "")
-            mergerServerProfile=$(doGetCurl "${SERVER_URL}/rest/private/v1/social/users/${mergerServerUser}" 2>/dev/null || echo "")
-            mergerServerFullName="$(echo ${mergerServerProfile} | jq -r .fullname)"
-            mergerServerLink="<a target=\"_self\" rel=\"noopener\" href=\"/portal/${SERVER_DEFAULT_SITENAME}/profile/${mergerServerUser}\" class=\"user-suggester\">${mergerServerFullName}</a>"
-            if [ -z "${mergerServerFullName:-}" ] || [ "${mergerServerFullName:-}" = "null" ]; then 
-              msg="🌟 $link has <tt>${mergeMethod}</tt> ${mergedCommitlink} into ${base_branch_link}."
-            else
-              msg="🌟 $link has <tt>${mergeMethod}</tt> ${mergedCommitlink} into ${base_branch_link} by ${mergerServerLink}."
-            fi
+            msg="🌟 $link has <tt>${mergeMethod}</tt> ${mergedCommitlink} into ${base_branch_link} by <tt>${mergerGithubUser}</tt>."
           elif [ "${{ github.event.action }}" = "closed" ]; then
             msg="🍂 $link has been <tt>${{ github.event.action }}</tt>."
           elif [ "${{ github.event.action }}" = "opened" ]; then
@@ -81,41 +67,14 @@ runs:
             msg="ℹ️ $link has been <tt>${{ github.event.action }}</tt>."
           fi
         elif [ "${{ github.event_name }}" = "pull_request_review" ] && [ "${{ github.event.action }}" = "submitted" ]; then
-          mentionCreator=""
-          commentMentionFilterRegex='( |^)@[a-zA-Z0-9]+-?[a-zA-Z0-9]+( |$)'
-          response=$(doGetCurl "${SERVER_GAMGH_CONNECTOR_REST_URL}/users/${creator}" || echo "")
-          [ -z "${response}" ] || mentionCreator=" FYI @${response} "
           reviewerGithubUser="${{ github.event.review.user.login }}"
-          reviewerServerUser=$(doGetCurl "${SERVER_GAMGH_CONNECTOR_REST_URL}/users/${reviewerGithubUser}" || echo "")
-          reviewerServerProfile=$(doGetCurl "${SERVER_URL}/rest/private/v1/social/users/${reviewerServerUser}" 2>/dev/null || echo "")
-          reviewerServerFullName="$(echo ${reviewerServerProfile} | jq -r .fullname)"
-          reviewerServerLink="<a target=\"_self\" rel=\"noopener\" href=\"/portal/${SERVER_DEFAULT_SITENAME}/profile/${reviewerServerUser}\" class=\"user-suggester\">${reviewerServerFullName}</a>"
           reviewEventLink="${{ github.event.review.html_url }}"
           if [ "${{ github.event.review.state }}" = "changes_requested" ]; then
             requestChangesEventLink="<a href=\"$reviewEventLink\">changes</a>"
-            if [ -z "${reviewerServerFullName:-}" ]; then 
-              msg="🛠️ $link requires ${requestChangesEventLink}.${mentionCreator}"
-            else 
-              msg="🛠️ $link requires ${requestChangesEventLink} from ${reviewerServerLink}.${mentionCreator}"
-            fi
+            msg="🛠️ $link requires ${requestChangesEventLink} from <tt>${reviewerGithubUser}</tt>."
           elif [ "${{ github.event.review.state }}" = "approved" ]; then
             approvedEventLink="<a href=\"$reviewEventLink\">approved</a>"
-            if [ -z "${reviewerServerFullName:-}" ]; then 
-              msg="✅ $link has been ${approvedEventLink}.${mentionCreator}"
-            else 
-              msg="✅ $link has been ${approvedEventLink} by ${reviewerServerLink}.${mentionCreator}"
-            fi
-          elif [ "${{ github.event.review.state }}" = "commented" ] && [[ "${{ github.event.review.body }}" =~ $commentMentionFilterRegex ]]; then
-            mentionEventLink="<a href=\"$reviewEventLink\" target="_blank">mentioned</a>"
-            mentionedGithubUsers=$(echo "${{ github.event.review.body }}" | grep -oP "$commentMentionFilterRegex" | tr -d '@' | xargs)
-            mentionedServerUsers=""
-            for mentionedGithubUser in ${mentionedGithubUsers}; do 
-              response=$(doGetCurl "${SERVER_GAMGH_CONNECTOR_REST_URL}/users/${mentionedGithubUser}" || echo "")
-              [ -z "${response}" ] && continue
-              [ -z "${mentionedServerUsers}" ] && mentionedServerUsers="@${response}" || mentionedServerUsers="${mentionedServerUsers} and @${response}"
-            done
-            [ -z "${mentionedServerUsers}" ] && mentionedServerUsers="$(echo $mentionedGithubUsers | wc -w ) user(s)"
-            msg="🙋 $link has ${mentionEventLink} ${mentionedServerUsers} in a comment."
+            msg="✅ $link has been ${approvedEventLink} by <tt>${reviewerGithubUser}</tt>."
           else
             stateEventLink="<a href=\"$reviewEventLink\">${{ github.event.review.state }}</a>"
             msg="ℹ️ $link has been ${stateEventLink}."
@@ -133,7 +92,6 @@ runs:
         SERVER_USERNAME: ${{ inputs.SERVER_USERNAME }}
         SERVER_PASSWORD: ${{ inputs.SERVER_PASSWORD }}
         SERVER_TASK_REST_PREFIXE_URL: ${{ inputs.SERVER_URL }}/rest/private/tasks
-        SERVER_GAMGH_CONNECTOR_REST_URL: ${{ inputs.SERVER_URL }}/rest/private/community/github
         TASKS_REGEX_FILTER: ${{ inputs.TASKS_REGEX_FILTER }}
         SERVER_DEFAULT_SITENAME: ${{ inputs.SERVER_DEFAULT_SITENAME }}
         message: ${{ github.event.pull_request.title }}
