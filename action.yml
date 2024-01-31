@@ -31,7 +31,7 @@ runs:
           [ -f /tmp/ghtribe.json ] || return
           jq -r ".[] | select(.githubid == \"$1\") | .tribeid" /tmp/ghtribe.json
         }
-        if [[ ! ${base_branch_name} =~ ^(master|develop(-exo|-meed)?|feature\/[A-Za-z-]+[0-9]?|stable\/[0-9]+(\.[0-9]+)*\.x)$ ]]; then
+        if [[ ! ${base_branch_name} =~ ^(master|develop(-exo|-meed)?|feature\/[A-Za-z-]+[0-9]?|stable\/[0-9]+(\.[0-9]+)*\.x(-exo)?)$ ]]; then
           echo "❌ Branch ${base_branch_name} is not supported for Task notification. Abort"
           exit 0
         fi
