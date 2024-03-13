@@ -110,17 +110,22 @@ runs:
             else 
               msg="✅ $link has been ${approvedEventLink} by ${reviewerServerLink}.${mentionCreator}"
             fi
-          elif [ "${{ github.event.review.state }}" = "commented" ] && [[ "${{ github.event.review.body }}" =~ $commentMentionFilterRegex ]]; then
-            mentionEventLink="<a href=\"$reviewEventLink\" target="_blank">mentioned</a>"
-            mentionedGithubUsers=$(echo "${{ github.event.review.body }}" | grep -oP "$commentMentionFilterRegex" | tr -d '@' | xargs)
-            mentionedServerUsers=""
-            for mentionedGithubUser in ${mentionedGithubUsers}; do 
-              response=$(getAssociatedTribeAccount ${mentionedGithubUser})
-              [ -z "${response}" ] && continue
-              [ -z "${mentionedServerUsers}" ] && mentionedServerUsers="@${response}" || mentionedServerUsers="${mentionedServerUsers} and @${response}"
-            done
-            [ -z "${mentionedServerUsers}" ] && mentionedServerUsers="$(echo $mentionedGithubUsers | wc -w ) user(s)"
-            msg="🙋 $link has ${mentionEventLink} ${mentionedServerUsers} in a comment."
+          elif [ "${{ github.event.review.state }}" = "commented" ]; then 
+            if [[ "${{ github.event.review.body }}" =~ $commentMentionFilterRegex ]]; then
+              mentionEventLink="<a href=\"$reviewEventLink\" target="_blank">mentioned</a>"
+              mentionedGithubUsers=$(echo "${{ github.event.review.body }}" | grep -oP "$commentMentionFilterRegex" | tr -d '@' | xargs)
+              mentionedServerUsers=""
+              for mentionedGithubUser in ${mentionedGithubUsers}; do 
+                response=$(getAssociatedTribeAccount ${mentionedGithubUser})
+                [ -z "${response}" ] && continue
+                [ -z "${mentionedServerUsers}" ] && mentionedServerUsers="@${response}" || mentionedServerUsers="${mentionedServerUsers} and @${response}"
+              done
+              [ -z "${mentionedServerUsers}" ] && mentionedServerUsers="$(echo $mentionedGithubUsers | wc -w ) user(s)"
+              msg="🙋 $link has ${mentionEventLink} ${mentionedServerUsers} in a comment by ${reviewerServerLink}."
+            else
+              commentEventLink="<a href=\"$reviewEventLink\" target="_blank">commented</a>"
+              msg="💬 $link has been ${commentEventLink} by ${reviewerServerLink}.${mentionCreator}"
+            fi
           else
             stateEventLink="<a href=\"$reviewEventLink\">${{ github.event.review.state }}</a>"
             msg="ℹ️ $link has been ${stateEventLink}."
