@@ -27,9 +27,11 @@ runs:
         doGetCurl() {
           curl -A "PR Webhook Tasks/1.0" -s -f -L -u ${SERVER_USERNAME}:${SERVER_PASSWORD} -XGET $*
         }
-        getAssociatedTribeAccount() {
-          [ -f /tmp/ghtribe.json ] || return
-          jq -r ".[] | select(.githubid == \"$1\") | .tribeid" /tmp/ghtribe.json
+        doGetAssociatedUsername() {
+          doGetCurl "${SERVER_GAMGH_CONNECTOR_REST_URL}?connectorUserId=${1}" || echo ""
+        }
+        doGetUserProfile() {
+          doGetCurl "${SERVER_URL}/rest/private/v1/social/users/${1}" || echo ""
         }
         if [[ ! ${base_branch_name} =~ ^(master|develop(-exo|-meed)?|feature\/[A-Za-z-]+[0-9]?|stable\/[0-9]+(\.[0-9]+)*\.x(-exo)?)$ ]]; then
           echo "❌ Branch ${base_branch_name} is not supported for Task notification. Abort"
@@ -47,10 +49,9 @@ runs:
         echo "OK Task(s) found! Starting notifications..."
         reducedBaseBranchName=$(echo ${base_branch_name} | sed -e 's|feature/||gi' -e 's|stable/||gi')
         link="PR <a href=\"https://github.com/${full_repo_name}/pull/${pull_number}\" title="${full_repo_name}#${pull_number}:${base_branch_name}" target="_blank">${repo_name}#${pull_number}:${reducedBaseBranchName}</a>"
-        curl -A "PR Webhook Tasks/1.0" -s -f -L "${SERVER_GAMGH_MAPPING_FILE_URL}" > /tmp/ghtribe.json
         if [ "${{ github.event_name }}" = "pull_request" ]; then
           if [ "${{ github.event.action }}" = "review_requested" ]; then
-            serverUser=$(getAssociatedTribeAccount ${requested_reviewer})
+            serverUser=$(doGetAssociatedUsername "${requested_reviewer}" || echo "")
             if [ ! -z "${serverUser}" ]; then
               echo "Requested reviewer is: ${serverUser}."
               msg="💭 $link requested a review from @${serverUser} "
@@ -67,8 +68,8 @@ runs:
             mergedCommitlink="<a href=\"https://github.com/${full_repo_name}/commit/${{ github.event.pull_request.merge_commit_sha }}\" target="_blank">${shortCommitId}</a>"
             base_branch_link="<a href=\"https://github.com/${full_repo_name}/tree/${base_branch_name}\" target="_blank">${base_branch_name}</a>"
             mergerGithubUser="${{ github.event.pull_request.merged_by.login }}"
-            mergerServerUser=$(getAssociatedTribeAccount ${mergerGithubUser})
-            mergerServerProfile=$(doGetCurl "${SERVER_URL}/rest/private/v1/social/users/${mergerServerUser}" 2>/dev/null || echo "")
+            mergerServerUser=$(doGetAssociatedUsername "${mergerGithubUser}")
+            mergerServerProfile=$(doGetUserProfile "${mergerServerUser}")
             mergerServerFullName="$(echo ${mergerServerProfile} | jq -r .fullname)"
             mergerServerLink="<a target=\"_self\" rel=\"noopener\" href=\"/portal/${SERVER_DEFAULT_SITENAME}/profile/${mergerServerUser}\" class=\"user-suggester\">${mergerServerFullName}</a>"
             if [ -z "${mergerServerFullName:-}" ] || [ "${mergerServerFullName:-}" = "null" ]; then 
@@ -88,11 +89,11 @@ runs:
         elif [ "${{ github.event_name }}" = "pull_request_review" ] && [ "${{ github.event.action }}" = "submitted" ]; then
           mentionCreator=""
           commentMentionFilterRegex='( |^)@[a-zA-Z0-9]+-?[a-zA-Z0-9]+( |$)'
-          response=$(getAssociatedTribeAccount ${creator})
+          response=$(doGetAssociatedUsername "${creator}")
           [ -z "${response}" ] || mentionCreator=" FYI @${response} "
           reviewerGithubUser="${{ github.event.review.user.login }}"
-          reviewerServerUser=$(getAssociatedTribeAccount ${reviewerGithubUser})
-          reviewerServerProfile=$(doGetCurl "${SERVER_URL}/rest/private/v1/social/users/${reviewerServerUser}" 2>/dev/null || echo "")
+          reviewerServerUser=$(doGetAssociatedUsername "${reviewerGithubUser}")
+          reviewerServerProfile=$(doGetUserProfile "${reviewerServerUser}")
           reviewerServerFullName="$(echo ${reviewerServerProfile} | jq -r .fullname)"
           reviewerServerLink="<a target=\"_self\" rel=\"noopener\" href=\"/portal/${SERVER_DEFAULT_SITENAME}/profile/${reviewerServerUser}\" class=\"user-suggester\">${reviewerServerFullName}</a>"
           reviewEventLink="${{ github.event.review.html_url }}"
@@ -110,13 +111,13 @@ runs:
             else 
               msg="✅ $link has been ${approvedEventLink} by ${reviewerServerLink}.${mentionCreator}"
             fi
-          elif [ "${{ github.event.review.state }}" = "commented" ]; then 
+          elif [ "${{ github.event.review.state }}" = "commented" ]; then
             if [[ "${{ github.event.review.body }}" =~ $commentMentionFilterRegex ]]; then
               mentionEventLink="<a href=\"$reviewEventLink\" target="_blank">mentioned</a>"
               mentionedGithubUsers=$(echo "${{ github.event.review.body }}" | grep -oP "$commentMentionFilterRegex" | tr -d '@' | xargs)
               mentionedServerUsers=""
               for mentionedGithubUser in ${mentionedGithubUsers}; do 
-                response=$(getAssociatedTribeAccount ${mentionedGithubUser})
+                response=$(doGetAssociatedUsername "${mentionedGithubUser}")
                 [ -z "${response}" ] && continue
                 [ -z "${mentionedServerUsers}" ] && mentionedServerUsers="@${response}" || mentionedServerUsers="${mentionedServerUsers} and @${response}"
               done
@@ -143,7 +144,7 @@ runs:
         SERVER_USERNAME: ${{ inputs.SERVER_USERNAME }}
         SERVER_PASSWORD: ${{ inputs.SERVER_PASSWORD }}
         SERVER_TASK_REST_PREFIXE_URL: ${{ inputs.SERVER_URL }}/rest/private/tasks
-        SERVER_GAMGH_MAPPING_FILE_URL: ${{ inputs.SERVER_URL }}/rest/jcr/repository/collaboration/Users/g___/gi___/git___/githubagent/Public/ghtribe.json
+        SERVER_GAMGH_CONNECTOR_REST_URL: ${{ inputs.SERVER_URL }}/rest/private/gamification/connectors/username/github
         TASKS_REGEX_FILTER: ${{ inputs.TASKS_REGEX_FILTER }}
         SERVER_DEFAULT_SITENAME: ${{ inputs.SERVER_DEFAULT_SITENAME }}
         message: ${{ github.event.pull_request.title }}
