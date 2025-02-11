@@ -34,15 +34,15 @@ runs:
           doGetCurl "${SERVER_URL}/rest/private/v1/social/users/${1}" || echo ""
         }
         if [[ ! ${base_branch_name} =~ ^(master|develop(-exo|-meed)?|feature\/[A-Za-z-]+[0-9]?|stable\/[0-9]+(\.[0-9]+)*\.x(-exo)?)$ ]]; then
-          echo "❌ Branch ${base_branch_name} is not supported for Task notification. Abort"
+          echo "❌ Branch ${base_branch_name} is not supported for Task notification. Aborting."
           exit 0
         fi
         if [[ ${creator} =~ ^(dependabot\[bot\]|snyk-bot)$ ]]; then
-          echo "❌ PR created with Bot users is not supported for Task notification. Abort"
+          echo "🤖 PR created by a bot user is not supported for Task notification. Aborting."
           exit 0
         fi
         if ! echo ${message:-} | grep -qioP "${TASKS_REGEX_FILTER}"; then
-          echo "No tasks found! Abort."
+          echo "🚫 No relevant tasks found in the PR title. Aborting."
           exit 0
         fi
         TASKS_IDS="$(echo ${message:-} | grep -ioP "${TASKS_REGEX_FILTER}" | grep -oP '[0-9]+' | xargs)"
@@ -53,17 +53,17 @@ runs:
           if [ "${{ github.event.action }}" = "review_requested" ]; then
             serverUser=$(doGetAssociatedUsername "${requested_reviewer}" || echo "")
             if [ ! -z "${serverUser}" ]; then
-              echo "Requested reviewer is: ${serverUser}."
-              msg="💭 $link requested a review from @${serverUser} "
+              echo "👀 Review requested from ${serverUser}."
+              msg="💭 $link is awaiting a review from @${serverUser}."
             else
-              echo "❌ Could not get Server user identifier! Abort"
+              echo "❌ Unable to retrieve Server user identifier! Aborting."
               exit 0
             fi
           elif [ "${{ github.event.pull_request.merged }}" = "true" ]; then
             shortCommitId=$(echo ${{ github.event.pull_request.merge_commit_sha }} | cut -c1-7)
             mergeMethod="merged"
             if [ "${{ github.event.pull_request.auto_merge }}" != "null" ] && [ "${{ github.event.pull_request.auto_merge }}" != "" ]; then 
-              mergeMethod="auto ${{ github.event.pull_request.auto_merge.merge_method }}-merged"
+              mergeMethod="automatically ${{ github.event.pull_request.auto_merge.merge_method }}-merged"
             fi
             mergedCommitlink="<a href=\"https://github.com/${full_repo_name}/commit/${{ github.event.pull_request.merge_commit_sha }}\" target="_blank">${shortCommitId}</a>"
             base_branch_link="<a href=\"https://github.com/${full_repo_name}/tree/${base_branch_name}\" target="_blank">${base_branch_name}</a>"
@@ -73,18 +73,18 @@ runs:
             mergerServerFullName="$(echo ${mergerServerProfile} | jq -r .fullname)"
             mergerServerLink="<a target=\"_self\" rel=\"noopener\" href=\"/portal/${SERVER_DEFAULT_SITENAME}/profile/${mergerServerUser}\" class=\"user-suggester\">${mergerServerFullName}</a>"
             if [ -z "${mergerServerFullName:-}" ] || [ "${mergerServerFullName:-}" = "null" ]; then 
-              msg="🌟 $link has <tt>${mergeMethod}</tt> ${mergedCommitlink} into ${base_branch_link}."
+              msg="🌟 $link was ${mergeMethod} as ${mergedCommitlink} into ${base_branch_link}."
             else
-              msg="🌟 $link has <tt>${mergeMethod}</tt> ${mergedCommitlink} into ${base_branch_link} by ${mergerServerLink}."
+              msg="🌟 $link was ${mergeMethod} as ${mergedCommitlink} into ${base_branch_link} by ${mergerServerLink}."
             fi
           elif [ "${{ github.event.action }}" = "closed" ]; then
-            msg="🍂 $link has been <tt>${{ github.event.action }}</tt>."
+            msg="🍂 $link has been ${{ github.event.action }}."
           elif [ "${{ github.event.action }}" = "opened" ]; then
-            msg="🌱 $link has been <tt>created</tt>."
+            msg="🌱 $link has been created."
           elif [ "${{ github.event.action }}" = "reopened" ]; then
-            msg="🍃 $link has been <tt>${{ github.event.action }}</tt>."
+            msg="🍃 $link has been reopened."
           else
-            msg="ℹ️ $link has been <tt>${{ github.event.action }}</tt>."
+            msg="ℹ️ $link has been updated with action: ${{ github.event.action }}."
           fi
         elif [ "${{ github.event_name }}" = "pull_request_review" ] && [ "${{ github.event.action }}" = "submitted" ]; then
           mentionCreator=""
