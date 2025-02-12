@@ -77,6 +77,7 @@ runs:
               mergerServerProfile=$(doGetUserProfile "${mergerServerUser}")
               mergerServerFullName="$(echo ${mergerServerProfile} | jq -r .fullname)"
               mergerServerLink="<a target=\"_self\" rel=\"noopener\" href=\"/portal/${SERVER_DEFAULT_SITENAME}/profile/${mergerServerUser}\" class=\"user-suggester\">${mergerServerFullName}</a>"
+            fi
             if [ -z "${mergerServerFullName:-}" ] || [ "${mergerServerFullName:-}" = "null" ]; then 
               msg="🌟 $link was ${mergeMethod} as ${mergedCommitlink} into ${base_branch_link}."
             else
