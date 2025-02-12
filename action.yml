@@ -69,9 +69,14 @@ runs:
             base_branch_link="<a href=\"https://github.com/${full_repo_name}/tree/${base_branch_name}\" target="_blank">${base_branch_name}</a>"
             mergerGithubUser="${{ github.event.pull_request.merged_by.login }}"
             mergerServerUser=$(doGetAssociatedUsername "${mergerGithubUser}")
-            mergerServerProfile=$(doGetUserProfile "${mergerServerUser}")
-            mergerServerFullName="$(echo ${mergerServerProfile} | jq -r .fullname)"
-            mergerServerLink="<a target=\"_self\" rel=\"noopener\" href=\"/portal/${SERVER_DEFAULT_SITENAME}/profile/${mergerServerUser}\" class=\"user-suggester\">${mergerServerFullName}</a>"
+            if [ -z "${mergerServerUser}" ]; then 
+              echo "❌ Unable to retrieve merger's server user identifier! Using Github username instead."
+              mergerServerFullName="${mergerGithubUser}"
+              mergerServerLink="👾 <a target=\"_self\" rel=\"noopener\" href=\"https://github.com/${mergerGithubUser}\" class=\"user-suggester\">${mergerServerFullName}</a>"
+            else
+              mergerServerProfile=$(doGetUserProfile "${mergerServerUser}")
+              mergerServerFullName="$(echo ${mergerServerProfile} | jq -r .fullname)"
+              mergerServerLink="<a target=\"_self\" rel=\"noopener\" href=\"/portal/${SERVER_DEFAULT_SITENAME}/profile/${mergerServerUser}\" class=\"user-suggester\">${mergerServerFullName}</a>"
             if [ -z "${mergerServerFullName:-}" ] || [ "${mergerServerFullName:-}" = "null" ]; then 
               msg="🌟 $link was ${mergeMethod} as ${mergedCommitlink} into ${base_branch_link}."
             else
@@ -93,13 +98,19 @@ runs:
           [ -z "${response}" ] || mentionCreator=" FYI @${response} "
           reviewerGithubUser="${{ github.event.review.user.login }}"
           reviewerServerUser=$(doGetAssociatedUsername "${reviewerGithubUser}")
-          reviewerServerProfile=$(doGetUserProfile "${reviewerServerUser}")
-          reviewerServerFullName="$(echo ${reviewerServerProfile} | jq -r .fullname)"
-          reviewerServerLink="<a target=\"_self\" rel=\"noopener\" href=\"/portal/${SERVER_DEFAULT_SITENAME}/profile/${reviewerServerUser}\" class=\"user-suggester\">${reviewerServerFullName}</a>"
+          if [ -z "${reviewerServerUser}" ]; then 
+            echo "❌ Unable to retrieve reviewer's server user identifier! Using Github username instead."
+            reviewerServerFullName="${reviewerGithubUser}"
+            reviewerServerLink="👾 <a target=\"_self\" rel=\"noopener\" href=\"https://github.com/${reviewerGithubUser}\" class=\"user-suggester\">${reviewerServerFullName}</a>"
+          else
+            reviewerServerProfile=$(doGetUserProfile "${reviewerServerUser}")
+            reviewerServerFullName="$(echo ${reviewerServerProfile} | jq -r .fullname)"
+            reviewerServerLink="<a target=\"_self\" rel=\"noopener\" href=\"/portal/${SERVER_DEFAULT_SITENAME}/profile/${reviewerServerUser}\" class=\"user-suggester\">${reviewerServerFullName}</a>"
+          fi
           reviewEventLink="${{ github.event.review.html_url }}"
           if [ "${{ github.event.review.state }}" = "changes_requested" ]; then
             requestChangesEventLink="<a href=\"$reviewEventLink\">changes</a>"
-            if [ -z "${reviewerServerFullName:-}" ]; then 
+            if [ -z "${reviewerServerFullName:-}" ] || [ "${reviewerServerFullName:-}" = "null" ]; then 
               msg="🛠️ $link requires ${requestChangesEventLink}.${mentionCreator}"
             else 
               msg="🛠️ $link requires ${requestChangesEventLink} from ${reviewerServerLink}.${mentionCreator}"
