@@ -54,7 +54,7 @@ runs:
             serverUser=$(doGetAssociatedUsername "${requested_reviewer}" || echo "")
             if [ ! -z "${serverUser}" ]; then
               echo "👀 Review requested from ${serverUser}."
-              msg="💭 $link is awaiting a review from @${serverUser}."
+              msg="💭 $link is awaiting a review from @${serverUser}"
             else
               echo "❌ Unable to retrieve Server user identifier! Aborting."
               exit 0
