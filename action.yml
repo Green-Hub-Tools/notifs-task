@@ -18,6 +18,10 @@ inputs:
     description: Pull request tasks regex filter
     required: false
     default: "(task|maint|exo)((-|_)[0-9]{4,})+"
+  GITHUB_TOKEN:
+    description: Github token (default repository token)
+    required: false
+    default: ""
 runs:
   using: "composite"
   steps:
@@ -118,10 +122,10 @@ runs:
             fi
           elif [ "${{ github.event.review.state }}" = "approved" ]; then
             approvedEventLink="<a href=\"$reviewEventLink\">approved</a>"
-            mergeableStatus="${{ github.event.pull_request.mergeable }}"
-            if [ "${mergeableStatus}" = "true" ]; then
+            mergeableStatus="$(gh pr view ${GITHUB_REF#refs/heads/} --repo ${clone_url} --json mergeable -q .mergeable)"
+            if [ "${mergeableStatus}" = "MERGEABLE" ]; then
               mergeCheckMessage=" (✅ Cleared to merge)"
-            elif [ "${mergeableStatus}" = "false" ]; then
+            elif [ "${mergeableStatus}" = "UNKNOWN" ]; then
               mergeCheckMessage=" (❌ Merge conflicts detected)"
             else
               mergeCheckMessage=""
@@ -167,6 +171,7 @@ runs:
         SERVER_GAMGH_CONNECTOR_REST_URL: ${{ inputs.SERVER_URL }}/rest/private/gamification/connectors/username/github
         TASKS_REGEX_FILTER: ${{ inputs.TASKS_REGEX_FILTER }}
         SERVER_DEFAULT_SITENAME: ${{ inputs.SERVER_DEFAULT_SITENAME }}
+        GH_TOKEN: ${{ inputs.GITHUB_TOKEN || github.token }}
         message: ${{ github.event.pull_request.title }}
         state: ${{ github.event.pull_request.state }}
         pull_number: ${{ github.event.pull_request.number }}
@@ -175,6 +180,7 @@ runs:
         full_repo_name: ${{ github.event.repository.full_name }}
         repo_name: ${{ github.event.repository.name }}
         base_branch_name: ${{ github.event.pull_request.base.ref }}
+        clone_url: ${{ github.event.pull_request.head.repo.clone_url }}
 
 branding:
   icon: "bell"
