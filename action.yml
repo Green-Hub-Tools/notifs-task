@@ -118,10 +118,18 @@ runs:
             fi
           elif [ "${{ github.event.review.state }}" = "approved" ]; then
             approvedEventLink="<a href=\"$reviewEventLink\">approved</a>"
+            mergeableStatus="${{ github.event.pull_request.mergeable }}"
+            if [ "${mergeableStatus}" = "true" ]; then
+              mergeCheckMessage=" (✅ Cleared to merge)"
+            elif [ "${mergeableStatus}" = "false" ]; then
+              mergeCheckMessage=" (❌ Merge conflicts detected)"
+            else
+              mergeCheckMessage=""
+            fi
             if [ -z "${reviewerServerFullName:-}" ]; then 
-              msg="✅ $link has been ${approvedEventLink}.${mentionCreator}"
+              msg="✅ $link has been ${approvedEventLink}${mergeCheckMessage}.${mentionCreator}"
             else 
-              msg="✅ $link has been ${approvedEventLink} by ${reviewerServerLink}.${mentionCreator}"
+              msg="✅ $link has been ${approvedEventLink}${mergeCheckMessage} by ${reviewerServerLink}.${mentionCreator}"
             fi
           elif [ "${{ github.event.review.state }}" = "commented" ]; then
             if [[ "${{ github.event.review.body }}" =~ $commentMentionFilterRegex ]]; then
