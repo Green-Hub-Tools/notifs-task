@@ -188,8 +188,6 @@ async function run() {
           
           if (mergeableStatus === 'MERGEABLE') {
             mergeCheckMessage = ' (✅ Cleared to merge)';
-          } else if (mergeableStatus === 'UNKNOWN') {
-            mergeCheckMessage = ' (❌ Merge conflicts detected)';
           }
         } catch (error) {
           core.info(`Failed to check mergeable status: ${error.message}`);
