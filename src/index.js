@@ -1,7 +1,7 @@
-const core = require('@actions/core');
-const github = require('@actions/github');
-const axios = require('axios');
-const { execSync } = require('child_process');
+import * as core from '@actions/core';
+import * as github from '@actions/github';
+import axios from 'axios';
+import { execSync } from 'child_process';
 
 // HTML Template Helpers
 const styles = {
