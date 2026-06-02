@@ -1,0 +1,49 @@
+name: CI & Release
+
+on:
+  push:
+    branches: [v1, main]
+  pull_request:
+    branches: [v1, main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Lint code
+        run: npm run lint
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build action
+        run: npm run build
+
+      - name: Check for changes in dist
+        id: git-check
+        run: |
+          git diff --exit-code dist/index.js || echo "changed=true" >> $GITHUB_OUTPUT
+
+      - name: Commit & Push changes
+        if: github.event_name == 'push' && steps.git-check.outputs.changed == 'true'
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add dist/index.js
+          git commit -m "chore: automated build [skip ci]"
+          git push
