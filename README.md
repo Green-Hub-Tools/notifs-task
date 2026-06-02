@@ -50,6 +50,14 @@ Install dependencies
 ```bash
 npm install
 ```
+Run tests
+```bash
+npm test
+```
+Lint code
+```bash
+npm run lint
+```
 Build action
 ```bash
 npm run build
