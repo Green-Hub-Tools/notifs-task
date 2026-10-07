@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.34.0 - 2026-10-07
 
 ### Changed
 - Approval notifications no longer mention (`cc @owner`) the PR owner when auto-merge is enabled on the PR, since the PR will be merged without further action from them.
