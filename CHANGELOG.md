@@ -10,6 +10,7 @@
 ### Added
 - Unit tests for the approval notification content.
 - Dependabot: grouped minor/patch updates.
+- CI: automatic GitHub release (tag `vMAJOR.MINOR` from `package.json`) when the version is bumped.
 
 ### Fixed
 - CI uses `npm ci` for reproducible builds; `package.json` version aligned with releases (1.33.0).
