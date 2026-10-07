@@ -41609,7 +41609,7 @@ const defaults = {
         fetch: getProxyFetch(baseUrl)
     }
 };
-const utils_GitHub = Octokit.plugin(restEndpointMethods, paginateRest).defaults(defaults);
+const GitHub = Octokit.plugin(restEndpointMethods, paginateRest).defaults(defaults);
 
 /**
  * Convience function to correctly format Octokit Options to pass into the constructor.
@@ -41617,15 +41617,15 @@ const utils_GitHub = Octokit.plugin(restEndpointMethods, paginateRest).defaults(
  * @param     token    the repo PAT or GITHUB_TOKEN
  * @param     options  other options to set
  */
-function utils_getOctokitOptions(token, options) {
+function getOctokitOptions(token, options) {
     const opts = Object.assign({}, options || {}); // Shallow clone - don't mutate the object provided by the caller
     // Auth
-    const auth = Utils.getAuthString(token, opts);
+    const auth = getAuthString(token, opts);
     if (auth) {
         opts.auth = auth;
     }
     // Orchestration ID
-    const userAgent = Utils.getUserAgentWithOrchestrationId(opts.userAgent);
+    const userAgent = getUserAgentWithOrchestrationId(opts.userAgent);
     if (userAgent) {
         opts.userAgent = userAgent;
     }
@@ -50673,10 +50673,19 @@ const createMergeableBadge = () =>
     .trim()
     .replace(/\n\s+/g, ' ')
 
+const createApprovalContent = ({
+  prLink,
+  approvedLink,
+  reviewerLink,
+  mergeableBadge = '',
+  mentionCreator = '',
+  autoMerge = false,
+}) =>
+  `${prLink} has been ${approvedLink} by ${reviewerLink}${mergeableBadge}${autoMerge ? '' : mentionCreator}`
+
 
 
 ;// CONCATENATED MODULE: ./src/index.js
-
 
 
 
@@ -50711,7 +50720,6 @@ function getPRInfo(payload) {
     number: pr.number,
     creator: pr.user.login,
     baseBranch: pr.base.ref,
-    cloneUrl: pr.head.repo.clone_url,
     merged: pr.merged,
     mergeCommitSha: pr.merge_commit_sha,
     autoMerge: pr.auto_merge,
@@ -50763,7 +50771,6 @@ async function run() {
       number,
       creator,
       baseBranch,
-      cloneUrl,
       requestedReviewer,
       merged,
       mergeCommitSha,
@@ -50916,19 +50923,11 @@ async function run() {
       } else if (reviewState === 'approved') {
         const approvedLink = createEventLink(reviewUrl, 'approved', cardColors.approved)
 
-        // Use gh CLI to check mergeable status
         let mergeableBadge = ''
         try {
-          const mergeableStatus = (0,external_child_process_namespaceObject.execSync)(
-            `gh pr view ${number} --repo ${cloneUrl} --json mergeable -q .mergeable`,
-            {
-              env: { ...process.env, GH_TOKEN: ghToken },
-            },
-          )
-            .toString()
-            .trim()
-
-          if (mergeableStatus === 'MERGEABLE') {
+          const { data } = await getOctokit(ghToken)
+            .rest.pulls.get({ ...context.repo, pull_number: number })
+          if (data.mergeable === true) {
             mergeableBadge = createMergeableBadge()
           }
         } catch (error) {
@@ -50938,7 +50937,14 @@ async function run() {
         msg = createCard(
           cardColors.approved,
           '✅',
-          `${prLink} has been ${approvedLink} by ${reviewerLink}${mergeableBadge}${autoMerge ? '' : mentionCreator}`,
+          createApprovalContent({
+            prLink,
+            approvedLink,
+            reviewerLink,
+            mergeableBadge,
+            mentionCreator,
+            autoMerge,
+          }),
         )
       } else if (reviewState === 'commented') {
         if (commentMentionFilterRegex.test(reviewBody)) {
