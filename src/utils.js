@@ -95,26 +95,68 @@ const createCard = (color, icon, content) =>
     .trim()
     .replace(/\n\s+/g, ' ')
 
+const escapeHtml = (value) =>
+  String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+
+const esc = escapeHtml
+
+// GitHub handles: alphanumerics and single hyphens, not preceded by a word char (skips e-mails)
+const MENTION_REGEX =
+  /(?:^|[^A-Za-z0-9_`])@([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?)(?![A-Za-z0-9-])/g
+
+const extractMentions = (body) => [
+  ...new Set([...String(body ?? '').matchAll(MENTION_REGEX)].map((m) => m[1])),
+]
+
+const retry = async (fn, attempts = 3, delayMs = 1000) => {
+  let lastError
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn()
+    } catch (error) {
+      lastError = error
+      if (i < attempts - 1) await new Promise((r) => setTimeout(r, delayMs * 2 ** i))
+    }
+  }
+  throw lastError
+}
+
+// Decides what to do for a pull_request event: 'skip', 'review_requested', 'merged', 'closed',
+// 'opened', 'ready_for_review', 'reopened' or 'updated'
+const getPullRequestEventKind = ({ action, merged, draft }) => {
+  if (action === 'review_requested') return 'review_requested'
+  if (action === 'closed') return merged ? 'merged' : 'closed'
+  if (action === 'opened') return draft ? 'skip' : 'opened'
+  if (action === 'ready_for_review') return 'ready_for_review'
+  if (action === 'reopened') return 'reopened'
+  return 'updated'
+}
+
 const createPRLink = (fullRepoName, pullNumber, repoName, reducedBaseBranchName) =>
   `
-<a href="https://github.com/${fullRepoName}/pull/${pullNumber}" 
+<a href="https://github.com/${esc(fullRepoName)}/pull/${pullNumber}" 
    target="_blank" 
    style="${styles.link}"
-   title="${fullRepoName}#${pullNumber}">
-  ${repoName}#${pullNumber}
+   title="${esc(fullRepoName)}#${pullNumber}">
+  ${esc(repoName)}#${pullNumber}
 </a>
-<span style="${styles.branchBadge}">${reducedBaseBranchName}</span>
+<span style="${styles.branchBadge}">${esc(reducedBaseBranchName)}</span>
 `
     .trim()
     .replace(/\n\s+/g, ' ')
 
 const createUserLink = (serverUser, serverFullName, serverDefaultSitename) =>
   `
-<a href="/portal/${serverDefaultSitename}/profile/${serverUser}" 
+<a href="/portal/${esc(serverDefaultSitename)}/profile/${esc(serverUser)}" 
    target="_self" 
    rel="noopener" 
    style="${styles.userLink}">
-  ${serverFullName}
+  ${esc(serverFullName)}
 </a>
 `
     .trim()
@@ -122,11 +164,11 @@ const createUserLink = (serverUser, serverFullName, serverDefaultSitename) =>
 
 const createExternalUserLink = (githubUser) =>
   `
-<a href="https://github.com/${githubUser}" 
+<a href="https://github.com/${esc(githubUser)}" 
    target="_blank" 
    rel="noopener" 
    style="${styles.externalUserLink}">
-  👾 ${githubUser}
+  👾 ${esc(githubUser)}
 </a>
 `
     .trim()
@@ -134,10 +176,10 @@ const createExternalUserLink = (githubUser) =>
 
 const createCommitLink = (fullRepoName, sha, shortSha) =>
   `
-<a href="https://github.com/${fullRepoName}/commit/${sha}" 
+<a href="https://github.com/${esc(fullRepoName)}/commit/${esc(sha)}" 
    target="_blank" 
    style="${styles.commitBadge}">
-  ${shortSha}
+  ${esc(shortSha)}
 </a>
 `
     .trim()
@@ -145,10 +187,10 @@ const createCommitLink = (fullRepoName, sha, shortSha) =>
 
 const createBranchLink = (fullRepoName, branchName) =>
   `
-<a href="https://github.com/${fullRepoName}/tree/${branchName}" 
+<a href="https://github.com/${esc(fullRepoName)}/tree/${esc(branchName)}" 
    target="_blank" 
    style="${styles.branchBadge}">
-  ${branchName}
+  ${esc(branchName)}
 </a>
 `
     .trim()
@@ -156,10 +198,10 @@ const createBranchLink = (fullRepoName, branchName) =>
 
 const createEventLink = (url, text, color = '#0969da') =>
   `
-<a href="${url}" 
+<a href="${esc(url)}" 
    target="_blank" 
    style="color: ${color}; text-decoration: none; font-weight: 600;">
-  ${text}
+  ${esc(text)}
 </a>
 `
     .trim()
@@ -185,6 +227,10 @@ const createApprovalContent = ({
   `${prLink} has been ${approvedLink} by ${reviewerLink}${mergeableBadge}${autoMerge ? '' : mentionCreator}`
 
 export {
+  escapeHtml,
+  extractMentions,
+  retry,
+  getPullRequestEventKind,
   createApprovalContent,
   styles,
   cardColors,

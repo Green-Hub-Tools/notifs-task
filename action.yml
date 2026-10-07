@@ -18,6 +18,14 @@ inputs:
     description: Pull request tasks regex filter
     required: false
     default: "(task|maint|exo)((-|_)[0-9]{4,})+"
+  BRANCH_REGEX_FILTER:
+    description: Regex of the base branches that trigger notifications
+    required: false
+    default: "^(master|develop(-exo|-meed)?|feature/[A-Za-z-]+[0-9]?|stable/[0-9]+(\\.[0-9]+)*\\.x(-exo)?)$"
+  DEDUPLICATE:
+    description: Skip a notification already present in the task comments (best effort, e.g. on workflow re-runs)
+    required: false
+    default: "false"
   GITHUB_TOKEN:
     description: Github token (default repository token)
     required: false
