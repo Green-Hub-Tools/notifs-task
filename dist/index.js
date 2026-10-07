@@ -50594,26 +50594,68 @@ const createCard = (color, icon, content) =>
     .trim()
     .replace(/\n\s+/g, ' ')
 
+const escapeHtml = (value) =>
+  String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+
+const esc = escapeHtml
+
+// GitHub handles: alphanumerics and single hyphens, not preceded by a word char (skips e-mails)
+const MENTION_REGEX =
+  /(?:^|[^A-Za-z0-9_`])@([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?)(?![A-Za-z0-9-])/g
+
+const extractMentions = (body) => [
+  ...new Set([...String(body ?? '').matchAll(MENTION_REGEX)].map((m) => m[1])),
+]
+
+const retry = async (fn, attempts = 3, delayMs = 1000) => {
+  let lastError
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn()
+    } catch (error) {
+      lastError = error
+      if (i < attempts - 1) await new Promise((r) => setTimeout(r, delayMs * 2 ** i))
+    }
+  }
+  throw lastError
+}
+
+// Decides what to do for a pull_request event: 'skip', 'review_requested', 'merged', 'closed',
+// 'opened', 'ready_for_review', 'reopened' or 'updated'
+const getPullRequestEventKind = ({ action, merged, draft }) => {
+  if (action === 'review_requested') return 'review_requested'
+  if (action === 'closed') return merged ? 'merged' : 'closed'
+  if (action === 'opened') return draft ? 'skip' : 'opened'
+  if (action === 'ready_for_review') return 'ready_for_review'
+  if (action === 'reopened') return 'reopened'
+  return 'updated'
+}
+
 const createPRLink = (fullRepoName, pullNumber, repoName, reducedBaseBranchName) =>
   `
-<a href="https://github.com/${fullRepoName}/pull/${pullNumber}" 
+<a href="https://github.com/${esc(fullRepoName)}/pull/${pullNumber}" 
    target="_blank" 
    style="${styles.link}"
-   title="${fullRepoName}#${pullNumber}">
-  ${repoName}#${pullNumber}
+   title="${esc(fullRepoName)}#${pullNumber}">
+  ${esc(repoName)}#${pullNumber}
 </a>
-<span style="${styles.branchBadge}">${reducedBaseBranchName}</span>
+<span style="${styles.branchBadge}">${esc(reducedBaseBranchName)}</span>
 `
     .trim()
     .replace(/\n\s+/g, ' ')
 
 const createUserLink = (serverUser, serverFullName, serverDefaultSitename) =>
   `
-<a href="/portal/${serverDefaultSitename}/profile/${serverUser}" 
+<a href="/portal/${esc(serverDefaultSitename)}/profile/${esc(serverUser)}" 
    target="_self" 
    rel="noopener" 
    style="${styles.userLink}">
-  ${serverFullName}
+  ${esc(serverFullName)}
 </a>
 `
     .trim()
@@ -50621,11 +50663,11 @@ const createUserLink = (serverUser, serverFullName, serverDefaultSitename) =>
 
 const createExternalUserLink = (githubUser) =>
   `
-<a href="https://github.com/${githubUser}" 
+<a href="https://github.com/${esc(githubUser)}" 
    target="_blank" 
    rel="noopener" 
    style="${styles.externalUserLink}">
-  👾 ${githubUser}
+  👾 ${esc(githubUser)}
 </a>
 `
     .trim()
@@ -50633,10 +50675,10 @@ const createExternalUserLink = (githubUser) =>
 
 const createCommitLink = (fullRepoName, sha, shortSha) =>
   `
-<a href="https://github.com/${fullRepoName}/commit/${sha}" 
+<a href="https://github.com/${esc(fullRepoName)}/commit/${esc(sha)}" 
    target="_blank" 
    style="${styles.commitBadge}">
-  ${shortSha}
+  ${esc(shortSha)}
 </a>
 `
     .trim()
@@ -50644,10 +50686,10 @@ const createCommitLink = (fullRepoName, sha, shortSha) =>
 
 const createBranchLink = (fullRepoName, branchName) =>
   `
-<a href="https://github.com/${fullRepoName}/tree/${branchName}" 
+<a href="https://github.com/${esc(fullRepoName)}/tree/${esc(branchName)}" 
    target="_blank" 
    style="${styles.branchBadge}">
-  ${branchName}
+  ${esc(branchName)}
 </a>
 `
     .trim()
@@ -50655,10 +50697,10 @@ const createBranchLink = (fullRepoName, branchName) =>
 
 const createEventLink = (url, text, color = '#0969da') =>
   `
-<a href="${url}" 
+<a href="${esc(url)}" 
    target="_blank" 
    style="color: ${color}; text-decoration: none; font-weight: 600;">
-  ${text}
+  ${esc(text)}
 </a>
 `
     .trim()
@@ -50691,24 +50733,36 @@ const createApprovalContent = ({
 
 
 
-async function getAssociatedUsername(api, githubUsername) {
-  try {
-    const response = await api.get(
-      `/rest/private/gamification/connectors/username/github?connectorUserId=${githubUsername}`,
+// A run handles a single event, but the same people (creator, reviewer, merger) come up repeatedly
+const usernameCache = new Map()
+const profileCache = new Map()
+
+const cached = (cache, key, load) => {
+  if (!cache.has(key)) {
+    cache.set(
+      key,
+      load().catch(() => null),
     )
-    return response.data
-  } catch (_error) {
-    return null
   }
+  return cache.get(key)
 }
 
-async function getUserProfile(api, serverUsername) {
-  try {
-    const response = await api.get(`/rest/private/v1/social/users/${serverUsername}`)
+function getAssociatedUsername(api, githubUsername) {
+  return cached(usernameCache, githubUsername, async () => {
+    const response = await api.get(
+      `/rest/private/gamification/connectors/username/github?connectorUserId=${encodeURIComponent(githubUsername)}`,
+    )
     return response.data
-  } catch (_error) {
-    return null
-  }
+  })
+}
+
+function getUserProfile(api, serverUsername) {
+  return cached(profileCache, serverUsername, async () => {
+    const response = await api.get(
+      `/rest/private/v1/social/users/${encodeURIComponent(serverUsername)}`,
+    )
+    return response.data
+  })
 }
 
 function getPRInfo(payload) {
@@ -50720,6 +50774,7 @@ function getPRInfo(payload) {
     number: pr.number,
     creator: pr.user.login,
     baseBranch: pr.base.ref,
+    draft: pr.draft,
     merged: pr.merged,
     mergeCommitSha: pr.merge_commit_sha,
     autoMerge: pr.auto_merge,
@@ -50729,6 +50784,20 @@ function getPRInfo(payload) {
     reviewBody: payload.review?.body,
     reviewer: payload.review?.user?.login,
     requestedReviewer: payload.requested_reviewer?.login,
+    requestedTeam: payload.requested_team?.name,
+  }
+}
+
+// Best effort: the Tasks server may normalize the HTML, so match on the PR/event links only
+async function alreadyPosted(api, taskId, msg) {
+  try {
+    const response = await api.get(`/rest/private/tasks/comments/${taskId}`)
+    const comments = Array.isArray(response.data) ? response.data : response.data?.comments || []
+    const urls = [...msg.matchAll(/href="([^"]+)"/g)].map((m) => m[1])
+    const key = urls.filter((u) => /\/(pull|commit)\//.test(u)).join('|')
+    return comments.some((c) => key && urls.every((u) => (c.comment || '').includes(u)))
+  } catch (_error) {
+    return false
   }
 }
 
@@ -50740,6 +50809,8 @@ async function run() {
     const serverPassword = getInput('SERVER_PASSWORD')
     const tasksRegexFilter = getInput('TASKS_REGEX_FILTER')
     const serverDefaultSitename = getInput('SERVER_DEFAULT_SITENAME')
+    const branchRegexFilter = getInput('BRANCH_REGEX_FILTER')
+    const deduplicate = getBooleanInput('DEDUPLICATE')
     const ghToken = getInput('GITHUB_TOKEN') || process.env.GITHUB_TOKEN
 
     // Get context
@@ -50772,6 +50843,8 @@ async function run() {
       creator,
       baseBranch,
       requestedReviewer,
+      requestedTeam,
+      draft,
       merged,
       mergeCommitSha,
       autoMerge,
@@ -50785,11 +50858,7 @@ async function run() {
     const repoName = context.repo.repo
 
     // Check if branch is supported
-    if (
-      !baseBranch.match(
-        /^(master|develop(-exo|-meed)?|feature\/[A-Za-z-]+[0-9]?|stable\/[0-9]+(\.[0-9]+)*\.x(-exo)?)$/i,
-      )
-    ) {
+    if (!new RegExp(branchRegexFilter, 'i').test(baseBranch)) {
       info(`❌ Branch ${baseBranch} is not supported for Task notification. Aborting.`)
       return
     }
@@ -50825,21 +50894,36 @@ async function run() {
 
     if (eventName === 'pull_request') {
       const action = payload.action
+      const kind = getPullRequestEventKind({ action, merged, draft })
 
-      if (action === 'review_requested') {
-        const serverUser = await getAssociatedUsername(api, requestedReviewer)
-        if (serverUser) {
+      if (kind === 'skip') {
+        info('📝 Draft PR: notification will be sent when it is ready for review. Aborting.')
+        return
+      } else if (kind === 'review_requested') {
+        if (requestedReviewer) {
+          const serverUser = await getAssociatedUsername(api, requestedReviewer)
+          if (!serverUser) {
+            info('❌ Unable to retrieve Server user identifier! Aborting.')
+            return
+          }
           info(`👀 Review requested from ${serverUser}.`)
           msg = createCard(
             cardColors.review,
             '👀',
             `${prLink} is <strong>awaiting review</strong> from @${serverUser} `,
           )
+        } else if (requestedTeam) {
+          info(`👀 Review requested from team ${requestedTeam}.`)
+          msg = createCard(
+            cardColors.review,
+            '👀',
+            `${prLink} is <strong>awaiting review</strong> from team <strong>${escapeHtml(requestedTeam)}</strong>`,
+          )
         } else {
-          info('❌ Unable to retrieve Server user identifier! Aborting.')
+          info('❌ No requested reviewer or team found! Aborting.')
           return
         }
-      } else if (merged === true) {
+      } else if (kind === 'merged') {
         const shortCommitId = mergeCommitSha.substring(0, 7)
         const commitLink = createCommitLink(fullRepoName, mergeCommitSha, shortCommitId)
         const branchLink = createBranchLink(fullRepoName, baseBranch)
@@ -50868,26 +50952,30 @@ async function run() {
           '🎉',
           `${prLink} was <strong>${mergeMethod}</strong> as ${commitLink} into ${branchLink} by ${mergerLink}`,
         )
-      } else if (action === 'closed') {
+      } else if (kind === 'closed') {
         msg = createCard(
           cardColors.closed,
           '🚫',
           `${prLink} has been <strong>closed</strong> without merging`,
         )
-      } else if (action === 'opened') {
+      } else if (kind === 'opened') {
         msg = createCard(
           cardColors.created,
           '🚀',
           `${prLink} has been <strong>created</strong> and is ready for review`,
         )
-      } else if (action === 'reopened') {
+      } else if (kind === 'ready_for_review') {
+        msg = createCard(cardColors.created, '🚀', `${prLink} is <strong>ready for review</strong>`)
+      } else if (kind === 'reopened') {
         msg = createCard(cardColors.reopened, '🔄', `${prLink} has been <strong>reopened</strong>`)
       } else {
         msg = createCard(cardColors.info, 'ℹ️', `${prLink} has been updated <em>(${action})</em>`)
       }
-    } else if (eventName === 'pull_request_review' && payload.action === 'submitted') {
+    } else if (
+      eventName === 'pull_request_review' &&
+      ['submitted', 'dismissed'].includes(payload.action)
+    ) {
       let mentionCreator = ''
-      const commentMentionFilterRegex = /( |^)@[a-zA-Z0-9]+-?[a-zA-Z0-9]+( |$)/
 
       const creatorResponse = await getAssociatedUsername(api, creator)
       if (creatorResponse) {
@@ -50920,6 +51008,13 @@ async function run() {
           '🔧',
           `${prLink} has ${changesLink} by ${reviewerLink}${mentionCreator}`,
         )
+      } else if (reviewState === 'dismissed') {
+        const dismissedLink = createEventLink(reviewUrl, 'dismissed', cardColors.info)
+        msg = createCard(
+          cardColors.info,
+          '🚫',
+          `A review on ${prLink} has been ${dismissedLink} (reviewer: ${reviewerLink})`,
+        )
       } else if (reviewState === 'approved') {
         const approvedLink = createEventLink(reviewUrl, 'approved', cardColors.approved)
 
@@ -50947,12 +51042,9 @@ async function run() {
           }),
         )
       } else if (reviewState === 'commented') {
-        if (commentMentionFilterRegex.test(reviewBody)) {
+        const mentionedGithubUsers = extractMentions(reviewBody)
+        if (mentionedGithubUsers.length > 0) {
           const mentionLink = createEventLink(reviewUrl, 'mentioned', cardColors.mention)
-          const mentionedGithubUsers = reviewBody
-            .match(commentMentionFilterRegex)
-            .map((m) => m.trim().replace('@', ''))
-
           let mentionedServerUsers = []
           for (const mentionedGithubUser of mentionedGithubUsers) {
             const response = await getAssociatedUsername(api, mentionedGithubUser)
@@ -50990,18 +51082,29 @@ async function run() {
     info(`***`)
 
     // Post comments to tasks
+    const failedTasks = []
     for (const taskId of tasksIds) {
+      if (deduplicate && (await alreadyPosted(api, taskId, msg))) {
+        info(`Task #${taskId} already has this notification. Skipping.`)
+        continue
+      }
       info(`Commenting to Task #${taskId}...`)
       try {
-        const response = await api.post(`/rest/private/tasks/comments/${taskId}`, `<p>${msg}</p>`, {
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-        })
+        const response = await retry(() =>
+          api.post(`/rest/private/tasks/comments/${taskId}`, `<p>${msg}</p>`, {
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+          }),
+        )
         info(`Status code: ${response.status}`)
       } catch (error) {
+        failedTasks.push(taskId)
         core_error(`Failed to post comment to task ${taskId}: ${error.message}`)
       }
+    }
+    if (failedTasks.length > 0) {
+      setFailed(`Failed to notify task(s): ${failedTasks.join(', ')}`)
     }
   } catch (error) {
     setFailed(error.message)
