@@ -50938,7 +50938,7 @@ async function run() {
         msg = createCard(
           cardColors.approved,
           '✅',
-          `${prLink} has been ${approvedLink} by ${reviewerLink}${mergeableBadge}${mentionCreator}`,
+          `${prLink} has been ${approvedLink} by ${reviewerLink}${mergeableBadge}${autoMerge ? '' : mentionCreator}`,
         )
       } else if (reviewState === 'commented') {
         if (commentMentionFilterRegex.test(reviewBody)) {
