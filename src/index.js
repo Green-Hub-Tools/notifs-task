@@ -1,7 +1,6 @@
 import * as core from '@actions/core'
 import * as github from '@actions/github'
 import axios from 'axios'
-import { execSync } from 'child_process'
 import {
   cardColors,
   createCard,
@@ -12,6 +11,7 @@ import {
   createBranchLink,
   createEventLink,
   createMergeableBadge,
+  createApprovalContent,
 } from './utils.js'
 
 async function getAssociatedUsername(api, githubUsername) {
@@ -43,7 +43,6 @@ function getPRInfo(payload) {
     number: pr.number,
     creator: pr.user.login,
     baseBranch: pr.base.ref,
-    cloneUrl: pr.head.repo.clone_url,
     merged: pr.merged,
     mergeCommitSha: pr.merge_commit_sha,
     autoMerge: pr.auto_merge,
@@ -95,7 +94,6 @@ async function run() {
       number,
       creator,
       baseBranch,
-      cloneUrl,
       requestedReviewer,
       merged,
       mergeCommitSha,
@@ -248,19 +246,12 @@ async function run() {
       } else if (reviewState === 'approved') {
         const approvedLink = createEventLink(reviewUrl, 'approved', cardColors.approved)
 
-        // Use gh CLI to check mergeable status
         let mergeableBadge = ''
         try {
-          const mergeableStatus = execSync(
-            `gh pr view ${number} --repo ${cloneUrl} --json mergeable -q .mergeable`,
-            {
-              env: { ...process.env, GH_TOKEN: ghToken },
-            },
-          )
-            .toString()
-            .trim()
-
-          if (mergeableStatus === 'MERGEABLE') {
+          const { data } = await github
+            .getOctokit(ghToken)
+            .rest.pulls.get({ ...context.repo, pull_number: number })
+          if (data.mergeable === true) {
             mergeableBadge = createMergeableBadge()
           }
         } catch (error) {
@@ -270,7 +261,14 @@ async function run() {
         msg = createCard(
           cardColors.approved,
           '✅',
-          `${prLink} has been ${approvedLink} by ${reviewerLink}${mergeableBadge}${autoMerge ? '' : mentionCreator}`,
+          createApprovalContent({
+            prLink,
+            approvedLink,
+            reviewerLink,
+            mergeableBadge,
+            mentionCreator,
+            autoMerge,
+          }),
         )
       } else if (reviewState === 'commented') {
         if (commentMentionFilterRegex.test(reviewBody)) {

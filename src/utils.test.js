@@ -8,6 +8,7 @@ import {
   createBranchLink,
   createEventLink,
   createMergeableBadge,
+  createApprovalContent,
 } from './utils.js'
 
 describe('utils', () => {
@@ -58,5 +59,31 @@ describe('utils', () => {
   test('createMergeableBadge should return a formatted HTML string', () => {
     const badge = createMergeableBadge()
     expect(badge).toContain('✅ Ready to merge')
+  })
+
+  describe('createApprovalContent', () => {
+    const base = {
+      prLink: 'PR',
+      approvedLink: 'approved',
+      reviewerLink: 'reviewer',
+      mentionCreator: ' cc @owner',
+    }
+
+    test('mentions the PR owner when auto-merge is disabled', () => {
+      expect(createApprovalContent({ ...base, autoMerge: null })).toBe(
+        'PR has been approved by reviewer cc @owner',
+      )
+    })
+
+    test('does not mention the PR owner when auto-merge is enabled', () => {
+      const content = createApprovalContent({ ...base, autoMerge: { merge_method: 'squash' } })
+      expect(content).toBe('PR has been approved by reviewer')
+      expect(content).not.toContain('@owner')
+    })
+
+    test('keeps the mergeable badge when auto-merge is enabled', () => {
+      const content = createApprovalContent({ ...base, mergeableBadge: '[ok]', autoMerge: {} })
+      expect(content).toBe('PR has been approved by reviewer[ok]')
+    })
   })
 })

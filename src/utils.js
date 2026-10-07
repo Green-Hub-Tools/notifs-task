@@ -174,7 +174,18 @@ const createMergeableBadge = () =>
     .trim()
     .replace(/\n\s+/g, ' ')
 
+const createApprovalContent = ({
+  prLink,
+  approvedLink,
+  reviewerLink,
+  mergeableBadge = '',
+  mentionCreator = '',
+  autoMerge = false,
+}) =>
+  `${prLink} has been ${approvedLink} by ${reviewerLink}${mergeableBadge}${autoMerge ? '' : mentionCreator}`
+
 export {
+  createApprovalContent,
   styles,
   cardColors,
   createCard,
