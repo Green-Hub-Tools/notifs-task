@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.35.0 - 2026-10-17
+
+### Security
+- Task IDs parsed from the PR title are validated (digits only) and URL-encoded before being used in the Tasks REST path (CodeQL `js/request-forgery`). IDs that are not plain digits are ignored.
+
+### Changed
+- Dev dependencies updated (eslint, eslint-plugin-jest, globals, jest, prettier).
+
 ## 1.34.0 - 2026-10-07
 
 ### Changed
