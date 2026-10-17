@@ -51612,7 +51612,176 @@ const extractTaskIds = (title, tasksRegexFilter) =>
 
 
 
+;// CONCATENATED MODULE: ./src/messages.js
+
+
+// Both builders return the card HTML, or null when nothing must be posted (the reason is logged).
+// ctx: { prInfo, prLink, payload, repo, defaultSitename,
+//        users: { username(githubLogin), profile(serverUsername) }, isMergeable(), log(message) }
+
+const serverUserLink = async (ctx, githubUser, fallbackLog) => {
+  const serverUser = await ctx.users.username(githubUser)
+  if (!serverUser) {
+    ctx.log(fallbackLog)
+    return createExternalUserLink(githubUser)
+  }
+  const profile = await ctx.users.profile(serverUser)
+  return createUserLink(serverUser, profile?.fullname || serverUser, ctx.defaultSitename)
+}
+
+async function buildPullRequestMessage(ctx) {
+  const { prInfo, prLink, payload, repo, users, log } = ctx
+  const { baseBranch, requestedReviewer, requestedTeam, draft, merged, mergeCommitSha, autoMerge } =
+    prInfo
+  const action = payload.action
+  const kind = getPullRequestEventKind({ action, merged, draft })
+
+  if (kind === 'skip') {
+    log('📝 Draft PR: notification will be sent when it is ready for review. Aborting.')
+    return null
+  }
+  if (kind === 'review_requested') {
+    if (requestedReviewer) {
+      const serverUser = await users.username(requestedReviewer)
+      if (!serverUser) {
+        log('❌ Unable to retrieve Server user identifier! Aborting.')
+        return null
+      }
+      log(`👀 Review requested from ${serverUser}.`)
+      return createCard(
+        cardColors.review,
+        '👀',
+        `${prLink} is <strong>awaiting review</strong> from @${serverUser} `,
+      )
+    }
+    if (requestedTeam) {
+      log(`👀 Review requested from team ${requestedTeam}.`)
+      return createCard(
+        cardColors.review,
+        '👀',
+        `${prLink} is <strong>awaiting review</strong> from team <strong>${escapeHtml(requestedTeam)}</strong>`,
+      )
+    }
+    log('❌ No requested reviewer or team found! Aborting.')
+    return null
+  }
+  if (kind === 'merged') {
+    const commitLink = createCommitLink(repo, mergeCommitSha, mergeCommitSha.substring(0, 7))
+    const branchLink = createBranchLink(repo, baseBranch)
+    const mergeMethod = autoMerge ? `auto-${autoMerge.merge_method}` : 'merged'
+    const mergerLink = await serverUserLink(
+      ctx,
+      prInfo.mergedBy,
+      "❌ Unable to retrieve merger's server user identifier! Using Github username instead.",
+    )
+    return createCard(
+      cardColors.merged,
+      '🎉',
+      `${prLink} was <strong>${mergeMethod}</strong> as ${commitLink} into ${branchLink} by ${mergerLink}`,
+    )
+  }
+  if (kind === 'closed') {
+    return createCard(
+      cardColors.closed,
+      '🚫',
+      `${prLink} has been <strong>closed</strong> without merging`,
+    )
+  }
+  if (kind === 'opened') {
+    return createCard(
+      cardColors.created,
+      '🚀',
+      `${prLink} has been <strong>created</strong> and is ready for review`,
+    )
+  }
+  if (kind === 'ready_for_review') {
+    return createCard(cardColors.created, '🚀', `${prLink} is <strong>ready for review</strong>`)
+  }
+  if (kind === 'reopened') {
+    return createCard(cardColors.reopened, '🔄', `${prLink} has been <strong>reopened</strong>`)
+  }
+  return createCard(cardColors.info, 'ℹ️', `${prLink} has been updated <em>(${action})</em>`)
+}
+
+async function buildReviewMessage(ctx) {
+  const { prInfo, prLink, payload, users } = ctx
+  const { creator, reviewState, reviewUrl, reviewBody, autoMerge } = prInfo
+
+  const creatorServerUser = await users.username(creator)
+  const mentionCreator = creatorServerUser ? ` <em>cc @${creatorServerUser} </em>` : ''
+
+  const reviewerLink = await serverUserLink(
+    ctx,
+    payload.review.user.login,
+    "❌ Unable to retrieve reviewer's server user identifier! Using Github username instead.",
+  )
+
+  if (reviewState === 'changes_requested') {
+    const changesLink = createEventLink(reviewUrl, 'changes requested', cardColors.changes)
+    return createCard(
+      cardColors.changes,
+      '🔧',
+      `${prLink} has ${changesLink} by ${reviewerLink}${mentionCreator}`,
+    )
+  }
+  if (reviewState === 'dismissed') {
+    const dismissedLink = createEventLink(reviewUrl, 'dismissed', cardColors.info)
+    return createCard(
+      cardColors.info,
+      '🚫',
+      `A review on ${prLink} has been ${dismissedLink} (reviewer: ${reviewerLink})`,
+    )
+  }
+  if (reviewState === 'approved') {
+    const approvedLink = createEventLink(reviewUrl, 'approved', cardColors.approved)
+    const mergeableBadge = (await ctx.isMergeable()) ? createMergeableBadge() : ''
+    return createCard(
+      cardColors.approved,
+      '✅',
+      createApprovalContent({
+        prLink,
+        approvedLink,
+        reviewerLink,
+        mergeableBadge,
+        mentionCreator,
+        autoMerge,
+      }),
+    )
+  }
+  if (reviewState === 'commented') {
+    const mentionedGithubUsers = extractMentions(reviewBody)
+    if (mentionedGithubUsers.length === 0) {
+      const commentLink = createEventLink(reviewUrl, 'new comment', cardColors.comment)
+      return createCard(
+        cardColors.comment,
+        '💬',
+        `${prLink} has a ${commentLink} by ${reviewerLink}${mentionCreator}`,
+      )
+    }
+    const mentionLink = createEventLink(reviewUrl, 'mentioned', cardColors.mention)
+    const mentionedServerUsers = []
+    for (const mentionedGithubUser of mentionedGithubUsers) {
+      const serverUser = await users.username(mentionedGithubUser)
+      if (serverUser) mentionedServerUsers.push(`@${serverUser} `)
+    }
+    const mentionedUsersDisplay =
+      mentionedServerUsers.length > 0
+        ? `<strong>${mentionedServerUsers.join('</strong> and <strong>')}</strong>`
+        : `<em>${mentionedGithubUsers.length} user(s)</em>`
+    return createCard(
+      cardColors.mention,
+      '📣',
+      `${prLink} ${mentionLink} ${mentionedUsersDisplay} in a comment by ${reviewerLink}`,
+    )
+  }
+  const stateLink = createEventLink(reviewUrl, reviewState, cardColors.info)
+  return createCard(cardColors.info, 'ℹ️', `${prLink} review status: ${stateLink}`)
+}
+
+
+
 ;// CONCATENATED MODULE: ./src/index.js
+
 
 
 
@@ -51686,22 +51855,7 @@ async function run() {
       return
     }
 
-    const {
-      title,
-      number,
-      creator,
-      baseBranch,
-      requestedReviewer,
-      requestedTeam,
-      draft,
-      merged,
-      mergeCommitSha,
-      autoMerge,
-      mergedBy,
-      reviewState,
-      reviewUrl,
-      reviewBody,
-    } = prInfo
+    const { title, number, creator, baseBranch } = prInfo
 
     const fullRepoName = context.repo.owner + '/' + context.repo.repo
     const repoName = context.repo.repo
@@ -51737,192 +51891,42 @@ async function run() {
 
     const reducedBaseBranchName = baseBranch.replace(/feature\//gi, '').replace(/stable\//gi, '')
 
-    let msg = ''
     const prLink = createPRLink(fullRepoName, number, repoName, reducedBaseBranchName)
+    const messageContext = {
+      prInfo,
+      prLink,
+      payload,
+      repo: fullRepoName,
+      defaultSitename: serverDefaultSitename,
+      users: {
+        username: (githubUser) => getAssociatedUsername(api, githubUser),
+        profile: (serverUser) => getUserProfile(api, serverUser),
+      },
+      isMergeable: async () => {
+        try {
+          const { data } = await getOctokit(ghToken)
+            .rest.pulls.get({ ...context.repo, pull_number: number })
+          return data.mergeable === true
+        } catch (error) {
+          info(`Failed to check mergeable status: ${error.message}`)
+          return false
+        }
+      },
+      log: (message) => info(message),
+    }
 
+    let msg = null
     if (eventName === 'pull_request') {
-      const action = payload.action
-      const kind = getPullRequestEventKind({ action, merged, draft })
-
-      if (kind === 'skip') {
-        info('📝 Draft PR: notification will be sent when it is ready for review. Aborting.')
-        return
-      } else if (kind === 'review_requested') {
-        if (requestedReviewer) {
-          const serverUser = await getAssociatedUsername(api, requestedReviewer)
-          if (!serverUser) {
-            info('❌ Unable to retrieve Server user identifier! Aborting.')
-            return
-          }
-          info(`👀 Review requested from ${serverUser}.`)
-          msg = createCard(
-            cardColors.review,
-            '👀',
-            `${prLink} is <strong>awaiting review</strong> from @${serverUser} `,
-          )
-        } else if (requestedTeam) {
-          info(`👀 Review requested from team ${requestedTeam}.`)
-          msg = createCard(
-            cardColors.review,
-            '👀',
-            `${prLink} is <strong>awaiting review</strong> from team <strong>${escapeHtml(requestedTeam)}</strong>`,
-          )
-        } else {
-          info('❌ No requested reviewer or team found! Aborting.')
-          return
-        }
-      } else if (kind === 'merged') {
-        const shortCommitId = mergeCommitSha.substring(0, 7)
-        const commitLink = createCommitLink(fullRepoName, mergeCommitSha, shortCommitId)
-        const branchLink = createBranchLink(fullRepoName, baseBranch)
-
-        let mergeMethod = 'merged'
-        if (autoMerge) {
-          mergeMethod = `auto-${autoMerge.merge_method}`
-        }
-
-        const mergerServerUser = await getAssociatedUsername(api, mergedBy)
-
-        let mergerLink
-        if (!mergerServerUser) {
-          info(
-            "❌ Unable to retrieve merger's server user identifier! Using Github username instead.",
-          )
-          mergerLink = createExternalUserLink(mergedBy)
-        } else {
-          const mergerServerProfile = await getUserProfile(api, mergerServerUser)
-          const mergerServerFullName = mergerServerProfile?.fullname || mergerServerUser
-          mergerLink = createUserLink(mergerServerUser, mergerServerFullName, serverDefaultSitename)
-        }
-
-        msg = createCard(
-          cardColors.merged,
-          '🎉',
-          `${prLink} was <strong>${mergeMethod}</strong> as ${commitLink} into ${branchLink} by ${mergerLink}`,
-        )
-      } else if (kind === 'closed') {
-        msg = createCard(
-          cardColors.closed,
-          '🚫',
-          `${prLink} has been <strong>closed</strong> without merging`,
-        )
-      } else if (kind === 'opened') {
-        msg = createCard(
-          cardColors.created,
-          '🚀',
-          `${prLink} has been <strong>created</strong> and is ready for review`,
-        )
-      } else if (kind === 'ready_for_review') {
-        msg = createCard(cardColors.created, '🚀', `${prLink} is <strong>ready for review</strong>`)
-      } else if (kind === 'reopened') {
-        msg = createCard(cardColors.reopened, '🔄', `${prLink} has been <strong>reopened</strong>`)
-      } else {
-        msg = createCard(cardColors.info, 'ℹ️', `${prLink} has been updated <em>(${action})</em>`)
-      }
+      msg = await buildPullRequestMessage(messageContext)
     } else if (
       eventName === 'pull_request_review' &&
       ['submitted', 'dismissed'].includes(payload.action)
     ) {
-      let mentionCreator = ''
-
-      const creatorResponse = await getAssociatedUsername(api, creator)
-      if (creatorResponse) {
-        mentionCreator = ` <em>cc @${creatorResponse} </em>`
-      }
-
-      const reviewerGithubUser = payload.review.user.login
-      const reviewerServerUser = await getAssociatedUsername(api, reviewerGithubUser)
-
-      let reviewerLink
-      if (!reviewerServerUser) {
-        info(
-          "❌ Unable to retrieve reviewer's server user identifier! Using Github username instead.",
-        )
-        reviewerLink = createExternalUserLink(reviewerGithubUser)
-      } else {
-        const reviewerServerProfile = await getUserProfile(api, reviewerServerUser)
-        const reviewerServerFullName = reviewerServerProfile?.fullname || reviewerServerUser
-        reviewerLink = createUserLink(
-          reviewerServerUser,
-          reviewerServerFullName,
-          serverDefaultSitename,
-        )
-      }
-
-      if (reviewState === 'changes_requested') {
-        const changesLink = createEventLink(reviewUrl, 'changes requested', cardColors.changes)
-        msg = createCard(
-          cardColors.changes,
-          '🔧',
-          `${prLink} has ${changesLink} by ${reviewerLink}${mentionCreator}`,
-        )
-      } else if (reviewState === 'dismissed') {
-        const dismissedLink = createEventLink(reviewUrl, 'dismissed', cardColors.info)
-        msg = createCard(
-          cardColors.info,
-          '🚫',
-          `A review on ${prLink} has been ${dismissedLink} (reviewer: ${reviewerLink})`,
-        )
-      } else if (reviewState === 'approved') {
-        const approvedLink = createEventLink(reviewUrl, 'approved', cardColors.approved)
-
-        let mergeableBadge = ''
-        try {
-          const { data } = await getOctokit(ghToken)
-            .rest.pulls.get({ ...context.repo, pull_number: number })
-          if (data.mergeable === true) {
-            mergeableBadge = createMergeableBadge()
-          }
-        } catch (error) {
-          info(`Failed to check mergeable status: ${error.message}`)
-        }
-
-        msg = createCard(
-          cardColors.approved,
-          '✅',
-          createApprovalContent({
-            prLink,
-            approvedLink,
-            reviewerLink,
-            mergeableBadge,
-            mentionCreator,
-            autoMerge,
-          }),
-        )
-      } else if (reviewState === 'commented') {
-        const mentionedGithubUsers = extractMentions(reviewBody)
-        if (mentionedGithubUsers.length > 0) {
-          const mentionLink = createEventLink(reviewUrl, 'mentioned', cardColors.mention)
-          let mentionedServerUsers = []
-          for (const mentionedGithubUser of mentionedGithubUsers) {
-            const response = await getAssociatedUsername(api, mentionedGithubUser)
-            if (response) {
-              mentionedServerUsers.push(`@${response} `)
-            }
-          }
-
-          const mentionedUsersDisplay =
-            mentionedServerUsers.length > 0
-              ? `<strong>${mentionedServerUsers.join('</strong> and <strong>')}</strong>`
-              : `<em>${mentionedGithubUsers.length} user(s)</em>`
-
-          msg = createCard(
-            cardColors.mention,
-            '📣',
-            `${prLink} ${mentionLink} ${mentionedUsersDisplay} in a comment by ${reviewerLink}`,
-          )
-        } else {
-          const commentLink = createEventLink(reviewUrl, 'new comment', cardColors.comment)
-          msg = createCard(
-            cardColors.comment,
-            '💬',
-            `${prLink} has a ${commentLink} by ${reviewerLink}${mentionCreator}`,
-          )
-        }
-      } else {
-        const stateLink = createEventLink(reviewUrl, reviewState, cardColors.info)
-        msg = createCard(cardColors.info, 'ℹ️', `${prLink} review status: ${stateLink}`)
-      }
+      msg = await buildReviewMessage(messageContext)
+    }
+    if (!msg) {
+      info('No notification to send for this event. Aborting.')
+      return
     }
 
     info(`*** Message is:`)
