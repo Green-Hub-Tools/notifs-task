@@ -101,9 +101,9 @@ jobs:
     permissions:
       contents: write # creates the draft release
     steps:
+      # Only package.json is read here, and the dist commit does not change it
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.build-dist.outputs.sha }}
           persist-credentials: false
 
       - name: Create a draft release if package.json version was bumped
