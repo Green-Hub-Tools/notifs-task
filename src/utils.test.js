@@ -11,6 +11,9 @@ import {
   createMergeableBadge,
   createApprovalContent,
   taskCommentsPath,
+  getPRInfo,
+  alreadyPosted,
+  extractTaskIds,
   escapeHtml,
   extractMentions,
   retry,
@@ -159,6 +162,117 @@ describe('utils', () => {
 
     it.each(['../admin', '1/../2', '12?x=1', '12 34', '', 'abc'])('rejects %j', (id) => {
       expect(() => taskCommentsPath(id)).toThrow('Invalid task id')
+    })
+  })
+
+  describe('extractTaskIds', () => {
+    const regex = '(?:TASK|task)-(\\d+)'
+
+    it('returns one id per match', () => {
+      expect(extractTaskIds('TASK-12: fix, task-34 too', regex)).toEqual(['12', '34'])
+    })
+
+    it('returns nothing when the title does not match', () => {
+      expect(extractTaskIds('no id here', regex)).toEqual([])
+    })
+
+    it('ignores matches holding several numbers or no digits', () => {
+      expect(extractTaskIds('TASK-1-2', 'TASK-\\d+-\\d+')).toEqual([])
+      expect(extractTaskIds('TASK-x', 'TASK-x')).toEqual([])
+    })
+  })
+
+  describe('getPRInfo', () => {
+    const pull_request = {
+      title: 'TASK-1 title',
+      number: 7,
+      user: { login: 'alice' },
+      base: { ref: 'main' },
+      draft: false,
+      merged: true,
+      merge_commit_sha: 'abc',
+      auto_merge: null,
+      merged_by: { login: 'bob' },
+    }
+
+    it('reads a pull_request payload', () => {
+      expect(getPRInfo({ pull_request })).toMatchObject({
+        title: 'TASK-1 title',
+        number: 7,
+        creator: 'alice',
+        baseBranch: 'main',
+        merged: true,
+        mergeCommitSha: 'abc',
+        mergedBy: 'bob',
+        reviewState: undefined,
+      })
+    })
+
+    it('reads a review payload', () => {
+      const info = getPRInfo({
+        review: {
+          pull_request,
+          state: 'approved',
+          html_url: 'https://x/review',
+          body: 'lgtm',
+          user: { login: 'carol' },
+        },
+        requested_team: { name: 'core' },
+      })
+      expect(info).toMatchObject({
+        reviewState: 'approved',
+        reviewUrl: 'https://x/review',
+        reviewBody: 'lgtm',
+        reviewer: 'carol',
+        requestedTeam: 'core',
+      })
+    })
+
+    it('returns null without a pull request', () => {
+      expect(getPRInfo({})).toBeNull()
+    })
+  })
+
+  describe('alreadyPosted', () => {
+    const msg =
+      '<a href="https://github.com/o/r/pull/7">PR</a> by <a href="https://github.com/alice">alice</a>'
+    const apiWith = (data) => ({ get: jest.fn().mockResolvedValue({ data }) })
+
+    it('detects a comment holding all the links (array response)', async () => {
+      const api = apiWith([
+        { comment: '<p>https://github.com/o/r/pull/7 https://github.com/alice</p>' },
+      ])
+      await expect(alreadyPosted(api, '12', msg)).resolves.toBe(true)
+      expect(api.get).toHaveBeenCalledWith('/rest/private/tasks/comments/12')
+    })
+
+    it('supports a { comments } response', async () => {
+      const api = apiWith({
+        comments: [{ comment: 'https://github.com/o/r/pull/7 https://github.com/alice' }],
+      })
+      await expect(alreadyPosted(api, '12', msg)).resolves.toBe(true)
+    })
+
+    it('is false when a link is missing or no comment matches', async () => {
+      await expect(
+        alreadyPosted(apiWith([{ comment: 'https://github.com/o/r/pull/7' }]), '12', msg),
+      ).resolves.toBe(false)
+      await expect(alreadyPosted(apiWith([]), '12', msg)).resolves.toBe(false)
+    })
+
+    it('is false when the message has no pull/commit link', async () => {
+      const api = apiWith([{ comment: 'https://github.com/alice' }])
+      await expect(
+        alreadyPosted(api, '12', '<a href="https://github.com/alice">a</a>'),
+      ).resolves.toBe(false)
+    })
+
+    it('is false on request errors and never requests an invalid id', async () => {
+      const api = { get: jest.fn().mockRejectedValue(new Error('down')) }
+      await expect(alreadyPosted(api, '12', msg)).resolves.toBe(false)
+      const spy = { get: jest.fn() }
+      await expect(alreadyPosted(spy, '../x', msg)).resolves.toBe(false)
+      expect(spy.get).not.toHaveBeenCalled()
     })
   })
 })

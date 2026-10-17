@@ -14,6 +14,9 @@ import {
   createApprovalContent,
   extractMentions,
   taskCommentsPath,
+  getPRInfo,
+  alreadyPosted,
+  extractTaskIds,
   getPullRequestEventKind,
   escapeHtml,
   retry,
@@ -49,42 +52,6 @@ function getUserProfile(api, serverUsername) {
     )
     return response.data
   })
-}
-
-function getPRInfo(payload) {
-  const pr = payload.pull_request || payload.review?.pull_request
-  if (!pr) return null
-
-  return {
-    title: pr.title,
-    number: pr.number,
-    creator: pr.user.login,
-    baseBranch: pr.base.ref,
-    draft: pr.draft,
-    merged: pr.merged,
-    mergeCommitSha: pr.merge_commit_sha,
-    autoMerge: pr.auto_merge,
-    mergedBy: pr.merged_by?.login,
-    reviewState: payload.review?.state,
-    reviewUrl: payload.review?.html_url,
-    reviewBody: payload.review?.body,
-    reviewer: payload.review?.user?.login,
-    requestedReviewer: payload.requested_reviewer?.login,
-    requestedTeam: payload.requested_team?.name,
-  }
-}
-
-// Best effort: the Tasks server may normalize the HTML, so match on the PR/event links only
-async function alreadyPosted(api, taskId, msg) {
-  try {
-    const response = await api.get(taskCommentsPath(taskId))
-    const comments = Array.isArray(response.data) ? response.data : response.data?.comments || []
-    const urls = [...msg.matchAll(/href="([^"]+)"/g)].map((m) => m[1])
-    const key = urls.filter((u) => /\/(pull|commit)\//.test(u)).join('|')
-    return comments.some((c) => key && urls.every((u) => (c.comment || '').includes(u)))
-  } catch (_error) {
-    return false
-  }
 }
 
 async function run() {
@@ -163,8 +130,7 @@ async function run() {
     }
 
     // Extract task IDs
-    const taskMatches = title.match(new RegExp(tasksRegexFilter, 'gi')) || []
-    const tasksIds = taskMatches.map((match) => match.match(/\d+/g).join(' ')).filter((id) => /^\d+$/.test(id))
+    const tasksIds = extractTaskIds(title, tasksRegexFilter)
 
     if (tasksIds.length === 0) {
       core.info('🚫 No task IDs found in the PR title. Aborting.')
