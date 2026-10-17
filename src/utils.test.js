@@ -10,6 +10,7 @@ import {
   createEventLink,
   createMergeableBadge,
   createApprovalContent,
+  taskCommentsPath,
   escapeHtml,
   extractMentions,
   retry,
@@ -148,6 +149,16 @@ describe('utils', () => {
       const fn = jest.fn().mockRejectedValue(new Error('boom'))
       await expect(retry(fn, 2, 1)).rejects.toThrow('boom')
       expect(fn).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  describe('taskCommentsPath', () => {
+    it('builds the comments path for a numeric id', () => {
+      expect(taskCommentsPath('123')).toBe('/rest/private/tasks/comments/123')
+    })
+
+    it.each(['../admin', '1/../2', '12?x=1', '12 34', '', 'abc'])('rejects %j', (id) => {
+      expect(() => taskCommentsPath(id)).toThrow('Invalid task id')
     })
   })
 })

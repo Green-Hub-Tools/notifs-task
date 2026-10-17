@@ -13,6 +13,7 @@ import {
   createMergeableBadge,
   createApprovalContent,
   extractMentions,
+  taskCommentsPath,
   getPullRequestEventKind,
   escapeHtml,
   retry,
@@ -76,7 +77,7 @@ function getPRInfo(payload) {
 // Best effort: the Tasks server may normalize the HTML, so match on the PR/event links only
 async function alreadyPosted(api, taskId, msg) {
   try {
-    const response = await api.get(`/rest/private/tasks/comments/${taskId}`)
+    const response = await api.get(taskCommentsPath(taskId))
     const comments = Array.isArray(response.data) ? response.data : response.data?.comments || []
     const urls = [...msg.matchAll(/href="([^"]+)"/g)].map((m) => m[1])
     const key = urls.filter((u) => /\/(pull|commit)\//.test(u)).join('|')
@@ -163,7 +164,7 @@ async function run() {
 
     // Extract task IDs
     const taskMatches = title.match(new RegExp(tasksRegexFilter, 'gi')) || []
-    const tasksIds = taskMatches.map((match) => match.match(/\d+/g).join(' ')).filter(Boolean)
+    const tasksIds = taskMatches.map((match) => match.match(/\d+/g).join(' ')).filter((id) => /^\d+$/.test(id))
 
     if (tasksIds.length === 0) {
       core.info('🚫 No task IDs found in the PR title. Aborting.')
@@ -377,7 +378,7 @@ async function run() {
       core.info(`Commenting to Task #${taskId}...`)
       try {
         const response = await retry(() =>
-          api.post(`/rest/private/tasks/comments/${taskId}`, `<p>${msg}</p>`, {
+          api.post(taskCommentsPath(taskId), `<p>${msg}</p>`, {
             headers: {
               'Content-Type': 'application/x-www-form-urlencoded',
             },

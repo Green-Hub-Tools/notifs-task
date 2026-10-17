@@ -226,8 +226,16 @@ const createApprovalContent = ({
 }) =>
   `${prLink} has been ${approvedLink} by ${reviewerLink}${mergeableBadge}${autoMerge ? '' : mentionCreator}`
 
+// Task ids come from the PR title, so only plain digits may reach the request path
+const taskCommentsPath = (taskId) => {
+  const id = String(taskId)
+  if (!/^\d+$/.test(id)) throw new Error(`Invalid task id: ${id}`)
+  return `/rest/private/tasks/comments/${encodeURIComponent(id)}`
+}
+
 export {
   escapeHtml,
+  taskCommentsPath,
   extractMentions,
   retry,
   getPullRequestEventKind,
