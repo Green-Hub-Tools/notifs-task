@@ -1,0 +1,8 @@
+# Default owner: requested for review on every pull request.
+*                    @hbenali
+
+# Security-sensitive paths
+/.github/            @hbenali
+/SECURITY.md         @hbenali
+/action.yml          @hbenali
+/src/                @hbenali

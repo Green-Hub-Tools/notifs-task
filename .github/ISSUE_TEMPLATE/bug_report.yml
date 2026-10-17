@@ -1,0 +1,56 @@
+name: Bug report
+description: The action doesn't behave as documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. **Security problem?** Don't file it here, see [SECURITY.md](https://github.com/Green-Hub-Tools/notifs-task/security/policy).
+  - type: input
+    id: version
+    attributes:
+      label: Version used
+      description: The ref in your workflow (`@v1`, `@v1.35`, a SHA).
+      placeholder: "Green-Hub-Tools/notifs-task@v1"
+    validations:
+      required: true
+  - type: dropdown
+    id: event
+    attributes:
+      label: Triggering event
+      options:
+        - pull_request (opened, closed, reopened, ready_for_review, ...)
+        - pull_request_review
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Workflow snippet
+      description: The step and the `on:` triggers. **Remove secrets** (the action inputs should come from `secrets.*`).
+      render: yaml
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you saw, and what you expected instead. Include the PR title if task ids are involved.
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Workflow log
+      description: The action's log output. Remove private data.
+      render: text
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues.
+          required: true
+        - label: I removed passwords, tokens and private data from everything above.
+          required: true
