@@ -1,0 +1,17 @@
+name: notifs-task CodeQL configuration
+
+# security-extended = the default security queries plus additional
+# lower-precision security queries (still no pure code-quality noise).
+queries:
+  - uses: security-extended
+
+paths-ignore:
+  # not our code
+  - node_modules
+  - vendor
+  # test inputs, sample content and docs
+  - test/fixtures
+  - testdata
+  - docs
+  # generated bundle (the sources in src/ are analysed)
+  - dist
