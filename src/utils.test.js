@@ -11,6 +11,7 @@ import {
   createMergeableBadge,
   createApprovalContent,
   taskCommentsPath,
+  excerpt,
   getPRInfo,
   alreadyPosted,
   extractTaskIds,
@@ -273,6 +274,16 @@ describe('utils', () => {
       const spy = { get: jest.fn() }
       await expect(alreadyPosted(spy, '../x', msg)).resolves.toBe(false)
       expect(spy.get).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('excerpt', () => {
+    it('flattens whitespace, escapes and truncates', () => {
+      expect(excerpt('a  b\n c')).toBe('a b c')
+      expect(excerpt('<b>')).toBe('&lt;b&gt;')
+      expect(excerpt('x'.repeat(200))).toHaveLength(140)
+      expect(excerpt('x'.repeat(200)).endsWith('…')).toBe(true)
+      expect(excerpt(undefined)).toBe('')
     })
   })
 })

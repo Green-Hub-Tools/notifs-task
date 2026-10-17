@@ -179,4 +179,20 @@ describe('buildReviewMessage', () => {
     await buildReviewMessage(ctx)
     expect(ctx.log).toHaveBeenCalledWith(expect.stringContaining("reviewer's server user"))
   })
+
+  it('quotes a short excerpt of a plain comment, escaped', async () => {
+    const msg = await buildReviewMessage(
+      makeCtx(review('commented', '<img src=x onerror=1> nice\n\nwork')),
+    )
+    expect(msg).toContain('“&lt;img src=x onerror=1&gt; nice work”')
+    expect(msg).not.toContain('<img')
+  })
+
+  it('escapes server-provided user names', async () => {
+    const opts = review('changes_requested')
+    opts.servers = { alice: '<script>x</script>', dave: 'dave.s' }
+    const msg = await buildReviewMessage(makeCtx(opts))
+    expect(msg).toContain('cc @&lt;script&gt;x&lt;/script&gt;')
+    expect(msg).not.toContain('<script>')
+  })
 })

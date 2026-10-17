@@ -11,6 +11,8 @@ const styles = {
     line-height: 1.5;
     color: #212529;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    max-width: 100%;
+    overflow-wrap: anywhere;
   `,
   link: `
     color: #0969da;
@@ -104,6 +106,14 @@ const escapeHtml = (value) =>
     .replace(/'/g, '&#39;')
 
 const esc = escapeHtml
+
+// First line(s) of a review body as a short plain-text quote (escaped)
+const excerpt = (text, max = 140) => {
+  const flat = String(text ?? '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return escapeHtml(flat.length > max ? `${flat.slice(0, max - 1)}…` : flat)
+}
 
 // GitHub handles: alphanumerics and single hyphens, not preceded by a word char (skips e-mails)
 const MENTION_REGEX =
@@ -277,6 +287,7 @@ const extractTaskIds = (title, tasksRegexFilter) =>
 
 export {
   escapeHtml,
+  excerpt,
   getPRInfo,
   alreadyPosted,
   extractTaskIds,

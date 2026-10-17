@@ -19,7 +19,7 @@ const cached = (cache, key, load) => {
   if (!cache.has(key)) {
     cache.set(
       key,
-      load().catch(() => null),
+      retry(load, 2, 300).catch(() => null),
     )
   }
   return cache.get(key)

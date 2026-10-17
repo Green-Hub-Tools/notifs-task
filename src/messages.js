@@ -11,6 +11,7 @@ import {
   extractMentions,
   getPullRequestEventKind,
   escapeHtml,
+  excerpt,
 } from './utils.js'
 
 // Both builders return the card HTML, or null when nothing must be posted (the reason is logged).
@@ -49,7 +50,7 @@ async function buildPullRequestMessage(ctx) {
       return createCard(
         cardColors.review,
         '👀',
-        `${prLink} is <strong>awaiting review</strong> from @${serverUser} `,
+        `${prLink} is <strong>awaiting review</strong> from @${escapeHtml(serverUser)} `,
       )
     }
     if (requestedTeam) {
@@ -75,7 +76,7 @@ async function buildPullRequestMessage(ctx) {
     return createCard(
       cardColors.merged,
       '🎉',
-      `${prLink} was <strong>${mergeMethod}</strong> as ${commitLink} into ${branchLink} by ${mergerLink}`,
+      `${prLink} was <strong>${escapeHtml(mergeMethod)}</strong> as ${commitLink} into ${branchLink} by ${mergerLink}`,
     )
   }
   if (kind === 'closed') {
@@ -98,7 +99,11 @@ async function buildPullRequestMessage(ctx) {
   if (kind === 'reopened') {
     return createCard(cardColors.reopened, '🔄', `${prLink} has been <strong>reopened</strong>`)
   }
-  return createCard(cardColors.info, 'ℹ️', `${prLink} has been updated <em>(${action})</em>`)
+  return createCard(
+    cardColors.info,
+    'ℹ️',
+    `${prLink} has been updated <em>(${escapeHtml(action)})</em>`,
+  )
 }
 
 async function buildReviewMessage(ctx) {
@@ -106,7 +111,7 @@ async function buildReviewMessage(ctx) {
   const { creator, reviewState, reviewUrl, reviewBody, autoMerge } = prInfo
 
   const creatorServerUser = await users.username(creator)
-  const mentionCreator = creatorServerUser ? ` <em>cc @${creatorServerUser} </em>` : ''
+  const mentionCreator = creatorServerUser ? ` <em>cc @${escapeHtml(creatorServerUser)} </em>` : ''
 
   const reviewerLink = await serverUserLink(
     ctx,
@@ -150,17 +155,18 @@ async function buildReviewMessage(ctx) {
     const mentionedGithubUsers = extractMentions(reviewBody)
     if (mentionedGithubUsers.length === 0) {
       const commentLink = createEventLink(reviewUrl, 'new comment', cardColors.comment)
+      const quote = excerpt(reviewBody)
       return createCard(
         cardColors.comment,
         '💬',
-        `${prLink} has a ${commentLink} by ${reviewerLink}${mentionCreator}`,
+        `${prLink} has a ${commentLink} by ${reviewerLink}${mentionCreator}${quote ? ` <em>“${quote}”</em>` : ''}`,
       )
     }
     const mentionLink = createEventLink(reviewUrl, 'mentioned', cardColors.mention)
     const mentionedServerUsers = []
     for (const mentionedGithubUser of mentionedGithubUsers) {
       const serverUser = await users.username(mentionedGithubUser)
-      if (serverUser) mentionedServerUsers.push(`@${serverUser} `)
+      if (serverUser) mentionedServerUsers.push(`@${escapeHtml(serverUser)} `)
     }
     const mentionedUsersDisplay =
       mentionedServerUsers.length > 0
