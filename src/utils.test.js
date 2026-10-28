@@ -285,5 +285,19 @@ describe('utils', () => {
       expect(excerpt('x'.repeat(200)).endsWith('…')).toBe(true)
       expect(excerpt(undefined)).toBe('')
     })
+
+    it('strips markdown so the quote reads as plain text', () => {
+      const body =
+        '## AI review — Round #1\n\nNo code finding at `91e21bd90`.\n\n**One item before approval: the `Knowledge:` line.** See [the doc](https://x.y).'
+      expect(excerpt(body, 500)).toBe(
+        'AI review — Round #1 No code finding at 91e21bd90. One item before approval: the Knowledge: line. See the doc.',
+      )
+      expect(excerpt('- a\n- b\n> q\n_i_ and snake_case_name')).toBe('a b q i and snake_case_name')
+    })
+
+    it('cuts on a word boundary', () => {
+      const out = excerpt('alpha beta gamma delta', 14)
+      expect(out).toBe('alpha beta…')
+    })
   })
 })

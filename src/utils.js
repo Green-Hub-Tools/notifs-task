@@ -107,12 +107,28 @@ const escapeHtml = (value) =>
 
 const esc = escapeHtml
 
-// First line(s) of a review body as a short plain-text quote (escaped)
+// Reduces GitHub-flavoured markdown to the plain text a reader would see
+const stripMarkdown = (text) =>
+  String(text ?? '')
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/```[^\n]*\n?([\s\S]*?)```/g, '$1')
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/^[ \t]*#{1,6}[ \t]+/gm, '')
+    .replace(/^[ \t]*>[ \t]?/gm, '')
+    .replace(/^[ \t]*(?:[-*+]|\d+\.)[ \t]+/gm, '')
+    .replace(/(\*\*|__)(.+?)\1/g, '$2')
+    .replace(/(^|[^\w*])([*_])(?=\S)(.+?)(?<=\S)\2(?![\w*])/g, '$1$3')
+    .replace(/~~(.+?)~~/g, '$1')
+    .replace(/`([^`]*)`/g, '$1')
+
+// Start of a review body as a short plain-text quote (markdown removed, escaped), cut on a word
 const excerpt = (text, max = 140) => {
-  const flat = String(text ?? '')
-    .replace(/\s+/g, ' ')
-    .trim()
-  return escapeHtml(flat.length > max ? `${flat.slice(0, max - 1)}…` : flat)
+  const flat = stripMarkdown(text).replace(/\s+/g, ' ').trim()
+  if (flat.length <= max) return escapeHtml(flat)
+  const head = flat.slice(0, max - 1)
+  const cut = head.lastIndexOf(' ')
+  return escapeHtml(`${(cut > max / 2 ? head.slice(0, cut) : head).trimEnd()}…`)
 }
 
 // GitHub handles: alphanumerics and single hyphens, not preceded by a word char (skips e-mails)
