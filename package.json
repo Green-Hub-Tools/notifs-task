@@ -1,6 +1,6 @@
 {
   "name": "pr-task-notification",
-  "version": "1.35.0",
+  "version": "1.36.0",
   "description": "Pull Request notification for tasks",
   "type": "module",
   "main": "dist/index.js",

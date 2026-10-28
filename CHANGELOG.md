@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.36.0 - 2026-10-28
+
+### Fixed
+- The comment card quotes the review body as plain text: markdown (headings, bold, backticks, links, lists, quotes) is stripped, and the quote is cut on a word boundary instead of mid-word.
+
+### Changed
+- GitHub Actions updated (Dependabot).
+
 ## 1.35.0 - 2026-10-17
 
 ### Security
