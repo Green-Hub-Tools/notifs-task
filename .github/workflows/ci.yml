@@ -70,6 +70,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.ref }}
+          # v1 requires pull requests and checks; only a repository admin may push the
+          # dist/ commit straight to it, and the GitHub Actions app cannot be a bypass
+          # actor. DIST_PUSH_TOKEN: fine-grained PAT of an admin (Contents: write on
+          # this repo only). Falls back to the workflow token while the branch is open.
+          token: ${{ secrets.DIST_PUSH_TOKEN || github.token }}
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
