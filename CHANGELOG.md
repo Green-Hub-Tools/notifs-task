@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 1.37.0 - 2026-11-24
+
+### Security
+- Dev dependency `minimatch` overridden to 11.x (denial of service via globparts amplification, Dependabot alert). Only eslint and jest use it, the shipped `dist/` is unaffected.
 
 ### Added
 - AI-review quiet mode: a PR labelled `AI_REVIEW_LABEL` (default `ai-review`, empty disables) gets one "AI review in progress" digest card per task instead of a card per review, without `cc` or quote; review requests and dismissed reviews are not announced. Opened, merged, closed, approved and changes-requested cards are unchanged.
