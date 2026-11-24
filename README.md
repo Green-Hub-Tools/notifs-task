@@ -45,8 +45,19 @@ Pin a release (e.g. `@v1.34`) for reproducible runs; see the [releases](https://
 | `SERVER_DEFAULT_SITENAME` | No | `dw` | Site used to build user profile links |
 | `TASKS_REGEX_FILTER` | No | `(task\|maint\|exo)((-\|_)[0-9]{4,})+` | Regex matching task references in the PR title |
 | `BRANCH_REGEX_FILTER` | No | `^(master\|develop(-exo\|-meed)?\|feature/[A-Za-z-]+[0-9]?\|stable/[0-9]+(\.[0-9]+)*\.x(-exo)?)$` | Regex of base branches that trigger notifications (case-insensitive) |
+| `AI_REVIEW_LABEL` | No | `ai-review` | PR label that turns on the AI-review quiet mode (empty disables it), see below |
 | `DEDUPLICATE` | No | `false` | Best effort: skip a notification already present in the task comments (useful on workflow re-runs) |
 | `GITHUB_TOKEN` | No | repository token | Token used to read the PR mergeable status |
+
+### AI-review quiet mode
+
+AI review rounds submit many reviews, each of which would add a card (and a `cc`) to the task. A PR carrying the `AI_REVIEW_LABEL` label (default `ai-review`) is notified quietly:
+
+- review comments collapse into a single "AI review in progress" card per PR and task, with a link to the latest review, no quote and no mention;
+- review requests and dismissed reviews are not announced;
+- opened, ready for review, reopened, closed and merged cards, and human `approved` / `changes requested` reviews, are unchanged.
+
+The label must be set on the PR (by the review tooling or by hand); without it nothing changes. Skipping the repeated digest relies on reading the task comments (best effort: if they cannot be read, the card is posted).
 
 PRs created by `dependabot[bot]` or `snyk-bot` are ignored.
 

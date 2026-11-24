@@ -1,3 +1,6 @@
+// Visible marker of the digest card: the server may rewrite markup, but not the text
+const AI_DIGEST_TEXT = 'AI review'
+
 const styles = {
   card: `
     display: inline-block;
@@ -277,6 +280,7 @@ function getPRInfo(payload) {
     reviewUrl: payload.review?.html_url,
     reviewBody: payload.review?.body,
     reviewer: payload.review?.user?.login,
+    labels: (pr.labels || []).map((l) => l.name),
     requestedReviewer: payload.requested_reviewer?.login,
     requestedTeam: payload.requested_team?.name,
   }
@@ -295,6 +299,27 @@ async function alreadyPosted(api, taskId, msg) {
   }
 }
 
+// A PR is under AI review when it carries the configured label (empty label: feature disabled)
+const hasLabel = (labels, label) => {
+  const wanted = String(label ?? '')
+    .trim()
+    .toLowerCase()
+  return wanted !== '' && (labels || []).some((l) => String(l).toLowerCase() === wanted)
+}
+
+// Best effort: the task already holds the AI-review digest card of this PR
+async function hasAiDigest(api, taskId, prUrl) {
+  try {
+    const response = await api.get(taskCommentsPath(taskId))
+    const comments = Array.isArray(response.data) ? response.data : response.data?.comments || []
+    return comments.some(
+      (c) => (c.comment || '').includes(prUrl) && (c.comment || '').includes(AI_DIGEST_TEXT),
+    )
+  } catch (_error) {
+    return false
+  }
+}
+
 // One id per regex match; a match holding several numbers is ambiguous, so it is ignored
 const extractTaskIds = (title, tasksRegexFilter) =>
   (title.match(new RegExp(tasksRegexFilter, 'gi')) || [])
@@ -306,6 +331,9 @@ export {
   excerpt,
   getPRInfo,
   alreadyPosted,
+  hasAiDigest,
+  hasLabel,
+  AI_DIGEST_TEXT,
   extractTaskIds,
   taskCommentsPath,
   extractMentions,

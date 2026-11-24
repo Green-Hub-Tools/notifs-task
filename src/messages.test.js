@@ -1,7 +1,14 @@
 import { jest } from '@jest/globals'
 import { buildPullRequestMessage, buildReviewMessage } from './messages.js'
 
-const makeCtx = ({ prInfo = {}, payload = {}, servers = {}, mergeable = false } = {}) => ({
+const makeCtx = ({
+  prInfo = {},
+  payload = {},
+  servers = {},
+  mergeable = false,
+  aiReview = false,
+} = {}) => ({
+  aiReview,
   prInfo: {
     creator: 'alice',
     baseBranch: 'main',
@@ -194,5 +201,63 @@ describe('buildReviewMessage', () => {
     const msg = await buildReviewMessage(makeCtx(opts))
     expect(msg).toContain('cc @&lt;script&gt;x&lt;/script&gt;')
     expect(msg).not.toContain('<script>')
+  })
+})
+
+describe('AI-reviewed PR (quiet mode)', () => {
+  const review = (state, body = 'x') => ({
+    aiReview: true,
+    prInfo: { reviewState: state, reviewBody: body },
+    payload: { action: 'submitted', review: { user: { login: 'dave' } } },
+    servers: { alice: 'alice.s', dave: 'dave.s' },
+  })
+
+  it('turns a review comment into a digest card without mention or quote', async () => {
+    const msg = await buildReviewMessage(makeCtx(review('commented', 'Medium: a race')))
+    expect(msg).toContain('AI review')
+    expect(msg).not.toContain('cc @')
+    expect(msg).not.toContain('a race')
+  })
+
+  it('does not mention users from the review body', async () => {
+    const msg = await buildReviewMessage(makeCtx(review('commented', 'ping @alice')))
+    expect(msg).toContain('AI review')
+    expect(msg).not.toContain('mentioned')
+  })
+
+  it('skips dismissed reviews', async () => {
+    const ctx = makeCtx(review('dismissed'))
+    await expect(buildReviewMessage(ctx)).resolves.toBeNull()
+    expect(ctx.log).toHaveBeenCalled()
+  })
+
+  it('keeps approvals and requested changes (human decisions)', async () => {
+    expect(await buildReviewMessage(makeCtx(review('approved')))).toContain('approved')
+    const changes = await buildReviewMessage(makeCtx(review('changes_requested')))
+    expect(changes).toContain('changes requested')
+    expect(changes).toContain('cc @alice.s')
+  })
+
+  it('does not announce review requests, but still opened and merged', async () => {
+    const requested = makeCtx({
+      aiReview: true,
+      payload: { action: 'review_requested' },
+      prInfo: { requestedReviewer: 'dave' },
+    })
+    await expect(buildPullRequestMessage(requested)).resolves.toBeNull()
+    const opened = await buildPullRequestMessage(
+      makeCtx({ aiReview: true, payload: { action: 'opened' } }),
+    )
+    expect(opened).toContain('created')
+  })
+
+  it('leaves normal PRs unchanged', async () => {
+    const ctx = makeCtx({
+      prInfo: { reviewState: 'commented', reviewBody: 'hi' },
+      payload: { action: 'submitted', review: { user: { login: 'dave' } } },
+    })
+    const msg = await buildReviewMessage(ctx)
+    expect(msg).toContain('new comment')
+    expect(msg).not.toContain('AI review')
   })
 })

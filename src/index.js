@@ -6,6 +6,8 @@ import {
   taskCommentsPath,
   getPRInfo,
   alreadyPosted,
+  hasAiDigest,
+  hasLabel,
   extractTaskIds,
   retry,
 } from './utils.js'
@@ -52,6 +54,7 @@ async function run() {
     const tasksRegexFilter = core.getInput('TASKS_REGEX_FILTER')
     const serverDefaultSitename = core.getInput('SERVER_DEFAULT_SITENAME')
     const branchRegexFilter = core.getInput('BRANCH_REGEX_FILTER')
+    const aiReviewLabel = core.getInput('AI_REVIEW_LABEL')
     const deduplicate = core.getBooleanInput('DEDUPLICATE')
     const ghToken = core.getInput('GITHUB_TOKEN') || process.env.GITHUB_TOKEN
 
@@ -116,8 +119,11 @@ async function run() {
     const reducedBaseBranchName = baseBranch.replace(/feature\//gi, '').replace(/stable\//gi, '')
 
     const prLink = createPRLink(fullRepoName, number, repoName, reducedBaseBranchName)
+    const aiReview = hasLabel(prInfo.labels, aiReviewLabel)
+    if (aiReview) core.info(`🤖 Label "${aiReviewLabel}" found: AI-review quiet mode.`)
     const messageContext = {
       prInfo,
+      aiReview,
       prLink,
       payload,
       repo: fullRepoName,
@@ -160,7 +166,14 @@ async function run() {
 
     // Post comments to tasks
     const failedTasks = []
+    const prUrl = `https://github.com/${fullRepoName}/pull/${number}`
+    const aiDigest =
+      aiReview && eventName === 'pull_request_review' && prInfo.reviewState === 'commented'
     for (const taskId of tasksIds) {
+      if (aiDigest && (await hasAiDigest(api, taskId, prUrl))) {
+        core.info(`Task #${taskId} already has the AI review digest. Skipping.`)
+        continue
+      }
       if (deduplicate && (await alreadyPosted(api, taskId, msg))) {
         core.info(`Task #${taskId} already has this notification. Skipping.`)
         continue

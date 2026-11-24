@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- AI-review quiet mode: a PR labelled `AI_REVIEW_LABEL` (default `ai-review`, empty disables) gets one "AI review in progress" digest card per task instead of a card per review, without `cc` or quote; review requests and dismissed reviews are not announced. Opened, merged, closed, approved and changes-requested cards are unchanged.
+
 ## 1.36.0 - 2026-10-28
 
 ### Fixed

@@ -12,6 +12,7 @@ import {
   getPullRequestEventKind,
   escapeHtml,
   excerpt,
+  AI_DIGEST_TEXT,
 } from './utils.js'
 
 // Both builders return the card HTML, or null when nothing must be posted (the reason is logged).
@@ -40,6 +41,10 @@ async function buildPullRequestMessage(ctx) {
     return null
   }
   if (kind === 'review_requested') {
+    if (ctx.aiReview) {
+      log('🤖 AI-reviewed PR: review requests are not announced. Aborting.')
+      return null
+    }
     if (requestedReviewer) {
       const serverUser = await users.username(requestedReviewer)
       if (!serverUser) {
@@ -118,6 +123,20 @@ async function buildReviewMessage(ctx) {
     payload.review.user.login,
     "❌ Unable to retrieve reviewer's server user identifier! Using Github username instead.",
   )
+
+  // AI-reviewed PR: rounds of comments collapse into one digest card, without mention
+  if (ctx.aiReview && reviewState === 'dismissed') {
+    ctx.log('🤖 AI-reviewed PR: dismissed reviews are not announced. Aborting.')
+    return null
+  }
+  if (ctx.aiReview && reviewState === 'commented') {
+    const latestLink = createEventLink(reviewUrl, 'latest', cardColors.comment)
+    return createCard(
+      cardColors.comment,
+      '🤖',
+      `<strong>${AI_DIGEST_TEXT}</strong> in progress on ${prLink} (${latestLink} by ${reviewerLink})`,
+    )
+  }
 
   if (reviewState === 'changes_requested') {
     const changesLink = createEventLink(reviewUrl, 'changes requested', cardColors.changes)

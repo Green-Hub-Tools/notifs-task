@@ -22,6 +22,10 @@ inputs:
     description: Regex of the base branches that trigger notifications
     required: false
     default: "^(master|develop(-exo|-meed)?|feature/[A-Za-z-]+[0-9]?|stable/[0-9]+(\\.[0-9]+)*\\.x(-exo)?)$"
+  AI_REVIEW_LABEL:
+    description: PR label marking an AI-reviewed PR (quiet mode - one digest card instead of one card per review, no review request or dismissal cards, no mention). Empty disables it
+    required: false
+    default: "ai-review"
   DEDUPLICATE:
     description: Skip a notification already present in the task comments (best effort, e.g. on workflow re-runs)
     required: false

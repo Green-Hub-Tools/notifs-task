@@ -14,6 +14,8 @@ import {
   excerpt,
   getPRInfo,
   alreadyPosted,
+  hasAiDigest,
+  hasLabel,
   extractTaskIds,
   escapeHtml,
   extractMentions,
@@ -298,6 +300,36 @@ describe('utils', () => {
     it('cuts on a word boundary', () => {
       const out = excerpt('alpha beta gamma delta', 14)
       expect(out).toBe('alpha beta…')
+    })
+  })
+
+  describe('hasLabel', () => {
+    it('matches case-insensitively and is off for an empty label', () => {
+      expect(hasLabel(['bug', 'AI-Review'], 'ai-review')).toBe(true)
+      expect(hasLabel(['bug'], 'ai-review')).toBe(false)
+      expect(hasLabel(['bug'], '')).toBe(false)
+      expect(hasLabel(undefined, 'ai-review')).toBe(false)
+    })
+  })
+
+  describe('hasAiDigest', () => {
+    const pr = 'https://github.com/o/r/pull/7'
+    const api = (comments) => ({ get: jest.fn(async () => ({ data: comments })) })
+
+    it('finds the digest of this PR only', async () => {
+      const mine = [{ comment: `<p>AI review in progress on <a href="${pr}">r#7</a></p>` }]
+      expect(await hasAiDigest(api(mine), '1', pr)).toBe(true)
+      expect(await hasAiDigest(api(mine), '1', 'https://github.com/o/r/pull/8')).toBe(false)
+    })
+
+    it('ignores other cards of the same PR', async () => {
+      const created = [{ comment: `<a href="${pr}">r#7</a> has been created` }]
+      expect(await hasAiDigest(api(created), '1', pr)).toBe(false)
+    })
+
+    it('fails open when the comments cannot be read', async () => {
+      const failing = { get: jest.fn(async () => Promise.reject(new Error('down'))) }
+      expect(await hasAiDigest(failing, '1', pr)).toBe(false)
     })
   })
 })
