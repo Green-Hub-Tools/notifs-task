@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.37.0 - 2026-11-24
+## 1.38.0 - 2026-11-24
 
 ### Security
 - Dev dependency `minimatch` overridden to 11.x (denial of service via globparts amplification, Dependabot alert). Only eslint and jest use it, the shipped `dist/` is unaffected.
