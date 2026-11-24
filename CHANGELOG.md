@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Security
+- Dev dependency `glob` overridden to 14.x (GHSA-3g3m-2fjr-6pw4, AbortSignal cancellation bypass; pulled in by jest). The shipped `dist/` is unaffected. `npm audit` reports 0 vulnerabilities.
+- Scorecard action pinned back to v2.5.0: the v2.6.0 container image is not published, so the workflow failed.
+
 ## 1.38.0 - 2026-11-24
 
 ### Security
