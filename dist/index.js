@@ -52221,6 +52221,9 @@ axios.default = axios;
 /* harmony default export */ const lib_axios = (axios);
 
 ;// CONCATENATED MODULE: ./src/utils.js
+// Visible marker of the digest card: the server may rewrite markup, but not the text
+const AI_DIGEST_TEXT = 'AI review'
+
 const styles = {
   card: `
     display: inline-block;
@@ -52500,6 +52503,7 @@ function getPRInfo(payload) {
     reviewUrl: payload.review?.html_url,
     reviewBody: payload.review?.body,
     reviewer: payload.review?.user?.login,
+    labels: (pr.labels || []).map((l) => l.name),
     requestedReviewer: payload.requested_reviewer?.login,
     requestedTeam: payload.requested_team?.name,
   }
@@ -52513,6 +52517,27 @@ async function alreadyPosted(api, taskId, msg) {
     const urls = [...msg.matchAll(/href="([^"]+)"/g)].map((m) => m[1])
     const key = urls.filter((u) => /\/(pull|commit)\//.test(u)).join('|')
     return comments.some((c) => key && urls.every((u) => (c.comment || '').includes(u)))
+  } catch (_error) {
+    return false
+  }
+}
+
+// A PR is under AI review when it carries the configured label (empty label: feature disabled)
+const hasLabel = (labels, label) => {
+  const wanted = String(label ?? '')
+    .trim()
+    .toLowerCase()
+  return wanted !== '' && (labels || []).some((l) => String(l).toLowerCase() === wanted)
+}
+
+// Best effort: the task already holds the AI-review digest card of this PR
+async function hasAiDigest(api, taskId, prUrl) {
+  try {
+    const response = await api.get(taskCommentsPath(taskId))
+    const comments = Array.isArray(response.data) ? response.data : response.data?.comments || []
+    return comments.some(
+      (c) => (c.comment || '').includes(prUrl) && (c.comment || '').includes(AI_DIGEST_TEXT),
+    )
   } catch (_error) {
     return false
   }
@@ -52555,6 +52580,10 @@ async function buildPullRequestMessage(ctx) {
     return null
   }
   if (kind === 'review_requested') {
+    if (ctx.aiReview) {
+      log('🤖 AI-reviewed PR: review requests are not announced. Aborting.')
+      return null
+    }
     if (requestedReviewer) {
       const serverUser = await users.username(requestedReviewer)
       if (!serverUser) {
@@ -52633,6 +52662,20 @@ async function buildReviewMessage(ctx) {
     payload.review.user.login,
     "❌ Unable to retrieve reviewer's server user identifier! Using Github username instead.",
   )
+
+  // AI-reviewed PR: rounds of comments collapse into one digest card, without mention
+  if (ctx.aiReview && reviewState === 'dismissed') {
+    ctx.log('🤖 AI-reviewed PR: dismissed reviews are not announced. Aborting.')
+    return null
+  }
+  if (ctx.aiReview && reviewState === 'commented') {
+    const latestLink = createEventLink(reviewUrl, 'latest', cardColors.comment)
+    return createCard(
+      cardColors.comment,
+      '🤖',
+      `<strong>${AI_DIGEST_TEXT}</strong> in progress on ${prLink} (${latestLink} by ${reviewerLink})`,
+    )
+  }
 
   if (reviewState === 'changes_requested') {
     const changesLink = createEventLink(reviewUrl, 'changes requested', cardColors.changes)
@@ -52747,6 +52790,7 @@ async function run() {
     const tasksRegexFilter = getInput('TASKS_REGEX_FILTER')
     const serverDefaultSitename = getInput('SERVER_DEFAULT_SITENAME')
     const branchRegexFilter = getInput('BRANCH_REGEX_FILTER')
+    const aiReviewLabel = getInput('AI_REVIEW_LABEL')
     const deduplicate = getBooleanInput('DEDUPLICATE')
     const ghToken = getInput('GITHUB_TOKEN') || process.env.GITHUB_TOKEN
 
@@ -52811,8 +52855,11 @@ async function run() {
     const reducedBaseBranchName = baseBranch.replace(/feature\//gi, '').replace(/stable\//gi, '')
 
     const prLink = createPRLink(fullRepoName, number, repoName, reducedBaseBranchName)
+    const aiReview = hasLabel(prInfo.labels, aiReviewLabel)
+    if (aiReview) info(`🤖 Label "${aiReviewLabel}" found: AI-review quiet mode.`)
     const messageContext = {
       prInfo,
+      aiReview,
       prLink,
       payload,
       repo: fullRepoName,
@@ -52854,7 +52901,14 @@ async function run() {
 
     // Post comments to tasks
     const failedTasks = []
+    const prUrl = `https://github.com/${fullRepoName}/pull/${number}`
+    const aiDigest =
+      aiReview && eventName === 'pull_request_review' && prInfo.reviewState === 'commented'
     for (const taskId of tasksIds) {
+      if (aiDigest && (await hasAiDigest(api, taskId, prUrl))) {
+        info(`Task #${taskId} already has the AI review digest. Skipping.`)
+        continue
+      }
       if (deduplicate && (await alreadyPosted(api, taskId, msg))) {
         info(`Task #${taskId} already has this notification. Skipping.`)
         continue
